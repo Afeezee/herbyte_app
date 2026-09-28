@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,7 @@ export default function RemedyProfile() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("Error fetching user:", error);
@@ -43,7 +43,7 @@ export default function RemedyProfile() {
   const { data: remedy, isLoading: remedyLoading } = useQuery({
     queryKey: ['remedy', remedyId],
     queryFn: async () => {
-      const remedies = await base44.entities.Remedy.filter({ id: remedyId });
+      const remedies = await api.entities.Remedy.filter({ id: remedyId });
       return remedies[0];
     },
     enabled: !!remedyId,
@@ -52,7 +52,7 @@ export default function RemedyProfile() {
   const { data: products, isLoading: productsLoading } = useQuery({
     queryKey: ['products-for-remedy', remedyId],
     queryFn: async () => {
-      const allProducts = await base44.entities.Product.filter({ 
+      const allProducts = await api.entities.Product.filter({ 
         linked_remedy_id: remedyId,
         moderation_status: "Approved",
         availability: true
@@ -69,7 +69,7 @@ export default function RemedyProfile() {
     queryFn: async () => {
       if (!remedy?.herbs_used || remedy.herbs_used.length === 0) return [];
       
-      const allHerbs = await base44.entities.Herb.list();
+      const allHerbs = await api.entities.Herb.list();
       
       const matchedHerbs = allHerbs.filter(herb => {
         return remedy.herbs_used.some(remedyHerbName => {
@@ -91,7 +91,7 @@ export default function RemedyProfile() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => base44.entities.Remedy.delete(remedyId),
+    mutationFn: () => api.entities.Remedy.delete(remedyId),
     onSuccess: () => {
       alert("Remedy deleted successfully!");
       window.location.href = createPageUrl("ExploreRemedies");

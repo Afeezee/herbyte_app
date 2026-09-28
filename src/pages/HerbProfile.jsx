@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +30,7 @@ export default function HerbProfile() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("Error fetching user:", error);
@@ -42,14 +42,14 @@ export default function HerbProfile() {
   const { data: herb, isLoading } = useQuery({
     queryKey: ['herb', herbId],
     queryFn: async () => {
-      const herbs = await base44.entities.Herb.filter({ id: herbId });
+      const herbs = await api.entities.Herb.filter({ id: herbId });
       return herbs[0];
     },
     enabled: !!herbId,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => base44.entities.Herb.delete(herbId),
+    mutationFn: () => api.entities.Herb.delete(herbId),
     onSuccess: () => {
       alert("Herb deleted successfully!");
       window.location.href = createPageUrl("ExploreHerbs");

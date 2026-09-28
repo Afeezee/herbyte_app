@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export default function ExploreRemedies() {
 
   const { data: remedies, isLoading } = useQuery({
     queryKey: ['remedies'],
-    queryFn: () => base44.entities.Remedy.filter({ approved_by_ai: true }, '-created_date'),
+    queryFn: () => api.entities.Remedy.filter({ approved_by_ai: true }, '-created_date'),
     initialData: [],
   });
 
@@ -50,19 +50,7 @@ export default function ExploreRemedies() {
     
     setLoadingSuggestions(true);
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `Given the search query "${searchQuery}", suggest 3-5 relevant health conditions, symptoms, or herbal remedies that the user might be looking for. Consider common misspellings, alternative names, and related health issues. Return only a simple list of suggestions.`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            suggestions: {
-              type: "array",
-              items: { type: "string" }
-            }
-          }
-        }
-      });
-      
+      const result = await api.ai.searchSuggestions({ kind: "remedy", query: searchQuery });
       setAiSuggestions(result.suggestions || []);
     } catch (error) {
       console.error("AI search error:", error);

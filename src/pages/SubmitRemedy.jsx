@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ export default function SubmitRemedy() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("User not logged in");
@@ -49,7 +49,7 @@ export default function SubmitRemedy() {
               You need to be signed in to contribute knowledge and submit remedies or herbs to the Herbyte community.
             </p>
             <Button 
-              onClick={() => base44.auth.redirectToLogin(window.location.href)}
+              onClick={() => api.auth.redirectToLogin(window.location.href)}
               className="bg-[#4A7C2E] hover:bg-[#2D5016]"
             >
               Sign In to Continue
@@ -127,27 +127,13 @@ function RemedySubmissionForm() {
   const [moderationResult, setModerationResult] = useState(null);
   const [submissionComplete, setSubmissionComplete] = useState(false);
 
-  const createRemedyMutation = useMutation({
-    mutationFn: (remedyData) => base44.entities.Remedy.create(remedyData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['remedies'] });
-    },
-  });
-
-  const createRemedySubmissionMutation = useMutation({
-    mutationFn: (submissionData) => base44.entities.RemedySubmission.create(submissionData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['remedy-submissions'] });
-    },
-  });
-
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setUploadingImage(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await api.UploadFile({ file });
       setUploadedImage(file_url);
     } catch (error) {
       console.error("Image upload error:", error);
@@ -161,113 +147,15 @@ function RemedySubmissionForm() {
     setAiModerating(true);
 
     try {
-      const moderationResponse = await base44.integrations.Core.InvokeLLM({
-        prompt: `As an expert herbalist, pharmacologist, and medical safety validator with access to current scientific databases, perform a comprehensive analysis of this herbal remedy submission:
-
-Remedy Name: ${formData.remedy_name}
-Primary Herb: ${formData.primary_herb_name}
-Other Herbs Used: ${formData.herbs_used}
-Health Condition: ${formData.health_condition}
-Preparation Method: ${formData.preparation_method}
-Dosage: ${formData.dosage}
-Duration of Use: ${formData.duration_of_use}
-Observed Effects: ${formData.observed_effects}
-
-TASK 1 - SAFETY VALIDATION:
-Evaluate scientific credibility and safety. Classify the submission as:
-- "Approved" if scientifically plausible and safe
-- "Flagged - Risk Identified" if concerns exist but may be safe with precautions
-- "Rejected" if dangerous or misleading
-
-TASK 2 - COMPREHENSIVE RESEARCH (Use internet context to gather accurate information):
-If approved or flagged, compile detailed remedy information including:
-
-1. REMEDY DESCRIPTION: Provide a comprehensive description of this remedy
-2. HEALTH BENEFITS: List 3-5 specific health benefits with evidence levels
-3. CONDITIONS TREATED: List all health conditions this remedy can address
-4. PREPARATION METHODS: Provide detailed preparation instructions
-5. DOSAGE GUIDANCE: Provide evidence-based recommended dosages
-6. DURATION: Recommended duration of use
-7. DRUG INTERACTIONS: List all known drug interactions
-8. CONTRAINDICATIONS: List situations/conditions when this remedy should NOT be used
-9. SIDE EFFECTS: List potential adverse effects
-10. RISK WARNINGS: Specific warnings for this remedy
-11. RESEARCH REFERENCES: Provide 2-4 real, verifiable scientific references
-12. REGION: Identify primary geographic region
-13. CATEGORY: Classify remedy (Adaptogen, Anti-inflammatory, Digestive, Immune Support, etc.)
-14. SAFETY RATING: Assign safety rating (Generally Safe, Use with Caution, High Risk - Expert Guidance Required)
-
-Be thorough, evidence-based, and prioritize user safety.`,
-        add_context_from_internet: true,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            moderation_status: {
-              type: "string",
-              enum: ["Approved", "Flagged - Risk Identified", "Rejected"]
-            },
-            risk_level: {
-              type: "string",
-              enum: ["Low", "Moderate", "High", "Critical"]
-            },
-            safety_rating: {
-              type: "string",
-              enum: ["Generally Safe", "Use with Caution", "High Risk - Expert Guidance Required"]
-            },
-            credibility_assessment: { type: "string" },
-            feedback_summary: { type: "string" },
-            remedy_description: { type: "string" },
-            region: {
-              type: "string",
-              enum: ["Africa", "Asia", "Europe", "North America", "South America", "Australia", "Middle East", "Global"]
-            },
-            category: {
-              type: "string",
-              enum: ["Adaptogen", "Anti-inflammatory", "Digestive", "Immune Support", "Cardiovascular", "Respiratory", "Nervous System", "Antimicrobial", "Pain Relief", "Skin Health", "Other"]
-            },
-            conditions_treated: { 
-              type: "array", 
-              items: { type: "string" } 
-            },
-            preparation_method_enhanced: { type: "string" },
-            dosage_guidance: { type: "string" },
-            duration_enhanced: { type: "string" },
-            drug_interactions: { 
-              type: "array", 
-              items: { type: "string" } 
-            },
-            contraindications: { 
-              type: "array", 
-              items: { type: "string" } 
-            },
-            side_effects: { 
-              type: "array", 
-              items: { type: "string" } 
-            },
-            risk_warnings: { 
-              type: "array", 
-              items: { type: "string" } 
-            },
-            research_references: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  title: { type: "string" },
-                  url: { type: "string" },
-                  source: { type: "string" }
-                }
-              }
-            },
-            expert_review_required: { type: "boolean" }
-          }
-        }
-      });
-
-      setModerationResult(moderationResponse);
-
-      const submissionData = {
-        herbs_used: formData.herbs_used ? formData.herbs_used.split(',').map(h => h.trim()) : [formData.primary_herb_name],
+      // Server-side pipeline: AI moderation + web-search grounding +
+      // reference filtering + row insert. Result comes back with the
+      // verdict; if approved, an admin publishes it (F3 fix).
+      const response = await api.submissions.remedy({
+        name: formData.remedy_name,
+        primary_herb_name: formData.primary_herb_name,
+        herbs_used: formData.herbs_used
+          ? formData.herbs_used.split(',').map(h => h.trim()).filter(Boolean)
+          : [],
         health_condition: formData.health_condition,
         preparation_method: formData.preparation_method,
         dosage: formData.dosage,
@@ -275,48 +163,18 @@ Be thorough, evidence-based, and prioritize user safety.`,
         observed_effects: formData.observed_effects,
         submitter_name: formData.submitter_name,
         submitter_contact: formData.submitter_contact,
-        moderation_status: moderationResponse.moderation_status,
-        risk_level: moderationResponse.risk_level,
-        expert_review_required: moderationResponse.expert_review_required || false,
-        ai_feedback: JSON.stringify(moderationResponse)
-      };
+        image_url: uploadedImage || undefined,
+      });
 
-      await createRemedySubmissionMutation.mutateAsync(submissionData);
-
-      if (moderationResponse.moderation_status === "Approved") {
-        const remedyData = {
-          name: formData.remedy_name,
-          description: moderationResponse.remedy_description || formData.observed_effects,
-          primary_herb_name: formData.primary_herb_name,
-          herbs_used: formData.herbs_used ? formData.herbs_used.split(',').map(h => h.trim()) : [],
-          health_condition: formData.health_condition,
-          conditions_treated: moderationResponse.conditions_treated || [formData.health_condition],
-          preparation_method: moderationResponse.preparation_method_enhanced || formData.preparation_method,
-          dosage: moderationResponse.dosage_guidance || formData.dosage,
-          duration_of_use: moderationResponse.duration_enhanced || formData.duration_of_use,
-          observed_effects: formData.observed_effects,
-          risk_warnings: moderationResponse.risk_warnings || [],
-          drug_interactions: moderationResponse.drug_interactions || [],
-          contraindications: moderationResponse.contraindications || [],
-          side_effects: moderationResponse.side_effects || [],
-          safety_rating: moderationResponse.safety_rating || "Use with Caution",
-          category: moderationResponse.category || "Other",
-          region: moderationResponse.region || "Global",
-          research_references: moderationResponse.research_references || [],
-          image_url: uploadedImage || "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=600&h=400&fit=crop",
-          submitted_by: formData.submitter_name || "Anonymous",
-          approved_by_ai: true,
-          featured: false
-        };
-
-        await createRemedyMutation.mutateAsync(remedyData);
-      }
-
+      setModerationResult({
+        moderation_status: response.moderation_status,
+        feedback_summary: response.ai_feedback,
+      });
+      queryClient.invalidateQueries({ queryKey: ['remedy-submissions'] });
       setSubmissionComplete(true);
-
     } catch (error) {
       console.error("Submission error:", error);
-      alert("Failed to submit remedy. Please try again.");
+      alert(error?.message ?? "Failed to submit remedy. Please try again.");
     }
 
     setAiModerating(false);
@@ -331,18 +189,21 @@ Be thorough, evidence-based, and prioritize user safety.`,
           </div>
           
           <h2 className="text-3xl font-bold text-[#2D5016] mb-4">
-            {moderationResult?.moderation_status === "Approved" ? "Published Successfully!" : "Thank You for Your Submission!"}
+            {moderationResult?.moderation_status === "Approved"
+              ? "Submitted — Queued for Publishing"
+              : "Thank You for Your Submission!"}
           </h2>
-          
+
           <div className="mb-6">
             {moderationResult?.moderation_status === "Approved" && (
               <>
                 <Badge className="bg-green-500 text-white text-lg px-4 py-2 mb-4">
                   <CheckCircle className="w-5 h-5 mr-2" />
-                  Approved & Published
+                  Approved — Awaiting Publish
                 </Badge>
                 <p className="text-gray-700 mb-4">
-                  Your remedy has been validated and is now live on the Explore Remedies page!
+                  Your remedy passed AI safety validation and is queued for a
+                  final human review before appearing on Explore Remedies.
                 </p>
               </>
             )}
@@ -617,20 +478,13 @@ function HerbSubmissionForm() {
   const [moderationResult, setModerationResult] = useState(null);
   const [submissionComplete, setSubmissionComplete] = useState(false);
 
-  const createHerbMutation = useMutation({
-    mutationFn: (herbData) => base44.entities.Herb.create(herbData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['herbs'] });
-    },
-  });
-
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setUploadingImage(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await api.UploadFile({ file });
       setUploadedImage(file_url);
     } catch (error) {
       console.error("Image upload error:", error);
@@ -644,134 +498,26 @@ function HerbSubmissionForm() {
     setAiModerating(true);
 
     try {
-      const moderationResponse = await base44.integrations.Core.InvokeLLM({
-        prompt: `As an expert herbalist, botanist, and medical safety validator with access to current scientific databases, perform a comprehensive analysis of this herb submission:
-
-Common Name: ${formData.common_name}
-Botanical Name: ${formData.botanical_name}
-Local Names: ${formData.local_names}
-Description: ${formData.description}
-Category: ${formData.category}
-Region: ${formData.region}
-Health Benefits: ${formData.health_benefits}
-Conditions Treated: ${formData.conditions_treated}
-Preparation Methods: ${formData.preparation_methods}
-Dosage: ${formData.dosage}
-
-TASK 1 - SAFETY VALIDATION:
-Verify botanical accuracy and safety. Classify as:
-- "Approved" if botanically accurate and safe
-- "Flagged - Risk Identified" if concerns exist
-- "Rejected" if dangerous, inaccurate, or invalid
-
-TASK 2 - COMPREHENSIVE RESEARCH (Use internet context):
-If approved or flagged, provide:
-
-1. ENHANCED DESCRIPTION: Comprehensive herb description
-2. HEALTH BENEFITS: List with evidence levels (Strong Clinical Evidence, Moderate Evidence, Preliminary Research, Traditional Use)
-3. CONDITIONS TREATED: All health conditions this herb addresses
-4. PREPARATION METHODS: Detailed methods with instructions
-5. DOSAGE: Evidence-based dosage recommendations
-6. DRUG INTERACTIONS: All known drug interactions
-7. CONTRAINDICATIONS: When NOT to use
-8. SIDE EFFECTS: Potential adverse effects
-9. MAJOR COMPOUNDS: Key chemical compounds
-10. RESEARCH REFERENCES: 2-4 verifiable scientific references
-11. SAFETY RATING: (Generally Safe, Use with Caution, High Risk - Expert Guidance Required)
-
-Be thorough and evidence-based.`,
-        add_context_from_internet: true,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            moderation_status: {
-              type: "string",
-              enum: ["Approved", "Flagged - Risk Identified", "Rejected"]
-            },
-            safety_rating: {
-              type: "string",
-              enum: ["Generally Safe", "Use with Caution", "High Risk - Expert Guidance Required"]
-            },
-            feedback_summary: { type: "string" },
-            enhanced_description: { type: "string" },
-            health_benefits: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  benefit: { type: "string" },
-                  evidence_level: { 
-                    type: "string",
-                    enum: ["Strong Clinical Evidence", "Moderate Evidence", "Preliminary Research", "Traditional Use", "Anecdotal"]
-                  }
-                }
-              }
-            },
-            conditions_treated: { type: "array", items: { type: "string" } },
-            preparation_methods: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  method: { type: "string" },
-                  instructions: { type: "string" }
-                }
-              }
-            },
-            dosage_guidance: { type: "string" },
-            drug_interactions: { type: "array", items: { type: "string" } },
-            contraindications: { type: "array", items: { type: "string" } },
-            side_effects: { type: "array", items: { type: "string" } },
-            major_compounds: { type: "array", items: { type: "string" } },
-            research_references: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  title: { type: "string" },
-                  url: { type: "string" },
-                  source: { type: "string" }
-                }
-              }
-            }
-          }
-        }
+      const response = await api.submissions.herb({
+        common_name: formData.common_name,
+        botanical_name: formData.botanical_name || undefined,
+        description: formData.description,
+        region: formData.region,
+        category: formData.category,
+        submitter_name: formData.submitter_name,
+        submitter_contact: formData.submitter_contact,
+        image_url: uploadedImage || undefined,
       });
 
-      setModerationResult(moderationResponse);
-
-      if (moderationResponse.moderation_status === "Approved") {
-        const herbData = {
-          common_name: formData.common_name,
-          botanical_name: formData.botanical_name,
-          local_names: formData.local_names ? formData.local_names.split(',').map(n => n.trim()) : [],
-          description: moderationResponse.enhanced_description || formData.description,
-          category: formData.category,
-          region: formData.region,
-          health_benefits: moderationResponse.health_benefits || [],
-          conditions_treated: moderationResponse.conditions_treated || [],
-          preparation_methods: moderationResponse.preparation_methods || [],
-          dosage: moderationResponse.dosage_guidance || formData.dosage,
-          drug_interactions: moderationResponse.drug_interactions || [],
-          contraindications: moderationResponse.contraindications || [],
-          side_effects: moderationResponse.side_effects || [],
-          major_compounds: moderationResponse.major_compounds || [],
-          research_references: moderationResponse.research_references || [],
-          safety_rating: moderationResponse.safety_rating || "Use with Caution",
-          image_url: uploadedImage || "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=600&h=400&fit=crop",
-          submitted_by: formData.submitter_name || "Anonymous",
-          community_contributed: true,
-          featured: false
-        };
-
-        await createHerbMutation.mutateAsync(herbData);
-      }
-
+      setModerationResult({
+        moderation_status: response.moderation_status,
+        feedback_summary: response.ai_feedback,
+      });
+      queryClient.invalidateQueries({ queryKey: ['herb-submissions'] });
       setSubmissionComplete(true);
-
     } catch (error) {
       console.error("Submission error:", error);
-      alert("Failed to submit herb. Please try again.");
+      alert(error?.message ?? "Failed to submit herb. Please try again.");
     }
 
     setAiModerating(false);
@@ -786,18 +532,21 @@ Be thorough and evidence-based.`,
           </div>
           
           <h2 className="text-3xl font-bold text-[#2D5016] mb-4">
-            {moderationResult?.moderation_status === "Approved" ? "Published Successfully!" : "Thank You for Your Submission!"}
+            {moderationResult?.moderation_status === "Approved"
+              ? "Submitted — Queued for Publishing"
+              : "Thank You for Your Submission!"}
           </h2>
-          
+
           <div className="mb-6">
             {moderationResult?.moderation_status === "Approved" && (
               <>
                 <Badge className="bg-green-500 text-white text-lg px-4 py-2 mb-4">
                   <CheckCircle className="w-5 h-5 mr-2" />
-                  Approved & Published
+                  Approved — Awaiting Publish
                 </Badge>
                 <p className="text-gray-700 mb-4">
-                  Your herb profile has been validated and is now live on the Browse Herbs page!
+                  Your herb profile passed AI safety validation and is queued
+                  for a final human review before appearing on Browse Herbs.
                 </p>
               </>
             )}

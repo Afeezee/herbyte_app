@@ -1,16 +1,6 @@
 /**
- * Compatibility client. Exposes the exact surface the frontend already
- * imports from `@base44/sdk`, so pages stay unchanged.
- *
- * All requests carry the Clerk session token from `window.Clerk`. If Clerk
- * isn't ready yet (initial load, sign-out just happened), calls fall back
- * to unauthenticated and the server rejects them with 401 — which the
- * existing error paths already handle by redirecting to sign-in.
- *
- * NOTE ON THE NAME: the export is still called `base44` so nothing has to
- * change during phases 2–6. Phase 7 renames imports across the codebase
- * (and this file) to `client.js` / `api`; phase 10 removes the alias
- * entirely.
+ * Frontend API client. Talks to /api on this same host, carrying the
+ * Clerk session token as a Bearer.
  */
 
 const API_BASE = '/api'
@@ -25,7 +15,7 @@ async function getClerkToken() {
   }
 }
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(status, code, message, body) {
     super(message ?? code ?? `HTTP ${status}`)
     this.name = 'ApiError'
@@ -70,15 +60,6 @@ async function request(path, { method = 'GET', body, query, headers } = {}) {
   return json
 }
 
-// ---------------------------------------------------------------------------
-// Entities — mirror base44.entities.<X>.{list, filter, create, update, delete}
-// ---------------------------------------------------------------------------
-
-/**
- * Build a sort/limit-aware query object. The Base44 SDK's `list` takes an
- * optional sort string like '-created_date' and optional limit; `filter`
- * additionally takes a where object as its first arg.
- */
 function buildListQuery(where, sort, limit) {
   const q = {}
   if (where) {
@@ -129,12 +110,8 @@ const entities = {
   HerbSubmission: entityClient('HerbSubmission'),
   SellerProfile: entityClient('SellerProfile'),
   Wishlist: entityClient('Wishlist'),
-  User: entityClient('User'), // admin listing only; see policies
+  User: entityClient('User'),
 }
-
-// ---------------------------------------------------------------------------
-// Auth — mirror base44.auth.{me, updateMe, logout, redirectToLogin}
-// ---------------------------------------------------------------------------
 
 const auth = {
   async me() {
@@ -149,7 +126,6 @@ const auth = {
       if (returnUrl) window.location.assign(returnUrl)
       return
     }
-    // Clerk's signOut clears the session and redirects.
     clerk.signOut({ redirectUrl: returnUrl ?? '/sign-in' }).catch(() => {})
   },
   redirectToLogin(returnUrl) {
@@ -160,30 +136,39 @@ const auth = {
 }
 
 // ---------------------------------------------------------------------------
-// Integrations — the only three the app actually calls: InvokeLLM,
-// UploadFile, SendEmail. Dead exports (SendSMS, GenerateImage,
-// ExtractDataFromUploadedFile) are intentionally omitted.
+// AI advice endpoints. Each frontend call site targets one specific
+// endpoint by name — no more generic InvokeLLM.
 // ---------------------------------------------------------------------------
 
-/**
- * Multiplex InvokeLLM to the four AI endpoints. The Base44 SDK took a
- * single generic call; on our side each endpoint has its own prompt +
- * schema + budget check. The frontend already passes shape-specific
- * payloads to each call site, so we detect which endpoint from the caller
- * argument.
- *
- * For phases 2–3 this returns a friendly "not implemented" error so pages
- * degrade correctly rather than blowing up; phase 4 wires the real routing.
- */
-async function InvokeLLM(payload) {
-  const endpoint = payload?.__endpoint ?? 'assistant'
-  return request(`/ai/${endpoint}`, { method: 'POST', body: payload })
+const ai = {
+  assistant: (input) => request('/ai/assistant', { method: 'POST', body: input }),
+  herbInsight: (input) => request('/ai/herb-insight', { method: 'POST', body: input }),
+  remedyInsight: (input) => request('/ai/remedy-insight', { method: 'POST', body: input }),
+  searchSuggestions: (input) =>
+    request('/ai/search-suggestions', { method: 'POST', body: input }),
 }
 
-/**
- * Upload via a multipart form to /api/upload. Server responds with
- * `{ file_url }` — same shape the Base44 SDK returned so no page changes.
- */
+const submissions = {
+  remedy: (input) => request('/submissions/remedy', { method: 'POST', body: input }),
+  herb: (input) => request('/submissions/herb', { method: 'POST', body: input }),
+  publishRemedy: (id, overrides) =>
+    request(`/submissions/remedy/${encodeURIComponent(id)}/publish`, {
+      method: 'POST',
+      body: overrides ?? {},
+    }),
+  publishHerb: (id, overrides) =>
+    request(`/submissions/herb/${encodeURIComponent(id)}/publish`, {
+      method: 'POST',
+      body: overrides ?? {},
+    }),
+}
+
+// ---------------------------------------------------------------------------
+// Uploads + email — Base44 lived under `integrations.Core.*`; we keep
+// that path so the small number of remaining SDK-shaped calls in the app
+// still resolve.
+// ---------------------------------------------------------------------------
+
 async function UploadFile({ file }) {
   const token = await getClerkToken()
   const form = new FormData()
@@ -207,19 +192,20 @@ async function SendEmail(payload) {
 }
 
 const integrations = {
-  Core: {
-    InvokeLLM,
-    UploadFile,
-    SendEmail,
-  },
+  Core: { UploadFile, SendEmail },
+  UploadFile,
+  SendEmail,
 }
 
 // ---------------------------------------------------------------------------
 
-export const base44 = {
+export const api = {
   entities,
   auth,
+  ai,
+  submissions,
   integrations,
+  // Convenience aliases so pages don't have to reach into integrations.Core.
+  UploadFile,
+  SendEmail,
 }
-
-export { ApiError }

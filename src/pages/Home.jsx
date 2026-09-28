@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Shield, Users, Sparkles, Search, BookOpen, CheckCircle, Beaker, Leaf, ShoppingBag, Store } from "lucide-react";
 import RemedyCard from "../components/remedies/RemedyCard";
@@ -11,7 +11,7 @@ import TestimonialCard from "../components/home/TestimonialCard";
 export default function Home() {
   const { data: featuredRemedies, isLoading } = useQuery({
     queryKey: ['featured-remedies'],
-    queryFn: () => base44.entities.Remedy.filter({ featured: true, approved_by_ai: true }, '-created_date', 6),
+    queryFn: () => api.entities.Remedy.filter({ featured: true, approved_by_ai: true }, '-created_date', 6),
     initialData: []
   });
 

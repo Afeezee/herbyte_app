@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,7 +21,7 @@ export default function CommentSection({ entityType, entityId, entityName }) {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("User not logged in");
@@ -34,7 +34,7 @@ export default function CommentSection({ entityType, entityId, entityName }) {
   const { data: allComments, isLoading } = useQuery({
     queryKey: ['comments', entityType, entityId],
     queryFn: async () => {
-      const comments = await base44.entities.Comment.filter({
+      const comments = await api.entities.Comment.filter({
         entity_type: entityType,
         entity_id: entityId
       }, '-created_date');
@@ -57,7 +57,7 @@ export default function CommentSection({ entityType, entityId, entityName }) {
 
   // Create comment mutation
   const createCommentMutation = useMutation({
-    mutationFn: (commentData) => base44.entities.Comment.create(commentData),
+    mutationFn: (commentData) => api.entities.Comment.create(commentData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['comments', entityType, entityId] });
       setNewComment("");
@@ -73,7 +73,7 @@ export default function CommentSection({ entityType, entityId, entityName }) {
 
   // Delete comment mutation
   const deleteCommentMutation = useMutation({
-    mutationFn: (commentId) => base44.entities.Comment.delete(commentId),
+    mutationFn: (commentId) => api.entities.Comment.delete(commentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['comments', entityType, entityId] });
     },
@@ -81,7 +81,7 @@ export default function CommentSection({ entityType, entityId, entityName }) {
 
   const handleSubmitComment = async () => {
     if (!user) {
-      base44.auth.redirectToLogin(window.location.href);
+      api.auth.redirectToLogin(window.location.href);
       return;
     }
 
@@ -103,7 +103,7 @@ export default function CommentSection({ entityType, entityId, entityName }) {
 
   const handleSubmitReply = async (parentCommentId) => {
     if (!user) {
-      base44.auth.redirectToLogin(window.location.href);
+      api.auth.redirectToLogin(window.location.href);
       return;
     }
 
@@ -176,7 +176,7 @@ export default function CommentSection({ entityType, entityId, entityName }) {
             <Alert className="bg-blue-50 border-blue-200">
               <AlertDescription className="text-blue-900">
                 <Button 
-                  onClick={() => base44.auth.redirectToLogin(window.location.href)}
+                  onClick={() => api.auth.redirectToLogin(window.location.href)}
                   variant="link"
                   className="text-blue-600 hover:text-blue-800 p-0 h-auto font-medium"
                 >

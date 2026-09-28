@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Heart, Loader2, Check } from "lucide-react";
@@ -13,7 +13,7 @@ export default function WishlistButton({ entityType, entityId, entityName, entit
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("User not logged in");
@@ -27,7 +27,7 @@ export default function WishlistButton({ entityType, entityId, entityName, entit
     queryKey: ['wishlist-item', entityType, entityId, user?.email],
     queryFn: async () => {
       if (!user?.email) return [];
-      return await base44.entities.Wishlist.filter({
+      return await api.entities.Wishlist.filter({
         user_email: user.email,
         entity_type: entityType,
         entity_id: entityId
@@ -42,7 +42,7 @@ export default function WishlistButton({ entityType, entityId, entityName, entit
 
   // Add to wishlist
   const addToWishlistMutation = useMutation({
-    mutationFn: (data) => base44.entities.Wishlist.create(data),
+    mutationFn: (data) => api.entities.Wishlist.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist-item'] });
       queryClient.invalidateQueries({ queryKey: ['wishlist-all'] });
@@ -53,7 +53,7 @@ export default function WishlistButton({ entityType, entityId, entityName, entit
 
   // Remove from wishlist
   const removeFromWishlistMutation = useMutation({
-    mutationFn: (id) => base44.entities.Wishlist.delete(id),
+    mutationFn: (id) => api.entities.Wishlist.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist-item'] });
       queryClient.invalidateQueries({ queryKey: ['wishlist-all'] });
@@ -62,7 +62,7 @@ export default function WishlistButton({ entityType, entityId, entityName, entit
 
   const handleToggleWishlist = async () => {
     if (!user) {
-      base44.auth.redirectToLogin(window.location.href);
+      api.auth.redirectToLogin(window.location.href);
       return;
     }
 

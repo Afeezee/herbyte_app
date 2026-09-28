@@ -91,10 +91,10 @@ export default function Layout({ children, currentPageName }) {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const { base44 } = await import("@/api/base44Client");
-        const currentUser = await base44.auth.me();
+        const { api } = await import("@/api/client");
+        const currentUser = await api.auth.me();
         setUser(currentUser);
-      } catch (error) {
+      } catch {
         // Not logged in
       }
     };

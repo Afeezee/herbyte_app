@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,60 +24,31 @@ export default function AIPersonalizedRemedyInsight({ remedy, onClose }) {
     setLoading(true);
 
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `As a knowledgeable herbalist and medical safety expert, analyze whether the herbal remedy "${remedy.name}" is appropriate for this person:
-
-User Profile:
-- Age: ${formData.age || "Not specified"}
-- Health Condition: ${formData.health_condition}
-- Current Medications: ${formData.current_medications || "None specified"}
-- Known Allergies: ${formData.allergies || "None specified"}
-- Additional Information: ${formData.additional_info || "None"}
-
-Remedy Information:
-- Name: ${remedy.name}
-- Description: ${remedy.description}
-- Primary Herb: ${remedy.primary_herb_name}
-- Herbs Used: ${remedy.herbs_used?.join(", ") || "Not specified"}
-- Intended For: ${remedy.health_condition}
-- Conditions Treated: ${remedy.conditions_treated?.join(", ") || "Not specified"}
-- Preparation: ${remedy.preparation_method}
-- Dosage: ${remedy.dosage || "Not specified"}
-- Drug Interactions: ${remedy.drug_interactions?.join(", ") || "None known"}
-- Contraindications: ${remedy.contraindications?.join(", ") || "None known"}
-- Side Effects: ${remedy.side_effects?.join(", ") || "None known"}
-- Safety Rating: ${remedy.safety_rating}
-
-Provide:
-1. A clear recommendation (suitable/use with caution/not recommended)
-2. Specific reasons based on their profile
-3. Potential risks or interactions with their medications
-4. Alternative remedies if not suitable
-5. Dosage guidance if appropriate
-6. Whether they should consult a healthcare professional
-
-Be thorough, safety-focused, and honest about limitations of herbal remedies.`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            recommendation: {
-              type: "string",
-              enum: ["Suitable", "Use with Caution", "Not Recommended", "Consult Healthcare Professional"]
-            },
-            reasoning: { type: "string" },
-            potential_risks: { type: "array", items: { type: "string" } },
-            alternative_remedies: { type: "array", items: { type: "string" } },
-            dosage_guidance: { type: "string" },
-            professional_consultation_needed: { type: "boolean" },
-            additional_notes: { type: "string" }
-          }
-        }
+      const result = await api.ai.remedyInsight({
+        remedy: {
+          name: remedy.name,
+          description: remedy.description,
+          primary_herb_name: remedy.primary_herb_name,
+          health_condition: remedy.health_condition,
+          preparation_method: remedy.preparation_method,
+          dosage: remedy.dosage,
+          drug_interactions: remedy.drug_interactions,
+          contraindications: remedy.contraindications,
+          side_effects: remedy.side_effects,
+          safety_rating: remedy.safety_rating,
+        },
+        profile: {
+          age: formData.age,
+          health_condition: formData.health_condition,
+          current_medications: formData.current_medications,
+          allergies: formData.allergies,
+          additional_info: formData.additional_info,
+        },
       });
-
       setAiResponse(result);
     } catch (error) {
       console.error("AI analysis error:", error);
-      alert("Failed to get AI insight. Please try again.");
+      alert(error?.message ?? "Failed to get AI insight. Please try again.");
     }
 
     setLoading(false);

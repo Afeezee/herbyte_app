@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ export default function SellerDashboard() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("Error fetching user:", error);
@@ -40,7 +40,7 @@ export default function SellerDashboard() {
     queryKey: ['seller-profile', user?.seller_profile_id],
     queryFn: async () => {
       if (!user?.seller_profile_id) return null;
-      const profiles = await base44.entities.SellerProfile.filter({ id: user.seller_profile_id });
+      const profiles = await api.entities.SellerProfile.filter({ id: user.seller_profile_id });
       return profiles[0];
     },
     enabled: !!user?.seller_profile_id,
@@ -50,7 +50,7 @@ export default function SellerDashboard() {
     queryKey: ['my-products', user?.seller_profile_id],
     queryFn: async () => {
       if (!user?.seller_profile_id) return [];
-      return await base44.entities.Product.filter({ seller_id: user.seller_profile_id });
+      return await api.entities.Product.filter({ seller_id: user.seller_profile_id });
     },
     enabled: !!user?.seller_profile_id,
     initialData: [],
@@ -74,7 +74,7 @@ export default function SellerDashboard() {
             <p className="text-gray-600 mb-6">
               You need to be signed in to access the seller dashboard.
             </p>
-            <Button onClick={() => base44.auth.redirectToLogin(window.location.href)}>
+            <Button onClick={() => api.auth.redirectToLogin(window.location.href)}>
               Sign In
             </Button>
           </CardContent>
@@ -313,9 +313,9 @@ function ProfileFormModal({ profile, userId, onClose }) {
 
   const createMutation = useMutation({
     mutationFn: async (data) => {
-      const newProfile = await base44.entities.SellerProfile.create(data);
+      const newProfile = await api.entities.SellerProfile.create(data);
       // Update user to link to this profile
-      await base44.auth.updateMe({
+      await api.auth.updateMe({
         seller_profile_id: newProfile.id,
         is_seller: true
       });
@@ -328,7 +328,7 @@ function ProfileFormModal({ profile, userId, onClose }) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data) => base44.entities.SellerProfile.update(profile.id, data),
+    mutationFn: (data) => api.entities.SellerProfile.update(profile.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-profile'] });
       onClose();
@@ -341,7 +341,7 @@ function ProfileFormModal({ profile, userId, onClose }) {
 
     setUploadingLogo(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await api.integrations.Core.UploadFile({ file });
       setFormData({...formData, logo_url: file_url});
     } catch (error) {
       console.error("Logo upload error:", error);
@@ -561,12 +561,12 @@ function ProductFormModal({ sellerProfile, onClose }) {
 
   const { data: remedies } = useQuery({
     queryKey: ['approved-remedies'],
-    queryFn: () => base44.entities.Remedy.filter({ approved_by_ai: true }),
+    queryFn: () => api.entities.Remedy.filter({ approved_by_ai: true }),
     initialData: [],
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Product.create(data),
+    mutationFn: (data) => api.entities.Product.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-products'] });
       onClose();
@@ -580,7 +580,7 @@ function ProductFormModal({ sellerProfile, onClose }) {
     setUploadingImages(true);
     try {
       const uploadPromises = files.map(file => 
-        base44.integrations.Core.UploadFile({ file })
+        api.integrations.Core.UploadFile({ file })
       );
       const results = await Promise.all(uploadPromises);
       const urls = results.map(r => r.file_url);

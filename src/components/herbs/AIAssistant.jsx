@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,45 +18,11 @@ export default function AIAssistant({ onClose }) {
     setLoading(true);
 
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `You are an expert herbalist and phytotherapy consultant. A person has described their symptoms/health concerns as: "${symptoms}"
-
-Based on these symptoms, provide:
-1. 3-5 recommended herbs that may help (with brief explanations)
-2. General dosage and preparation guidance for each
-3. Important safety warnings or contraindications
-4. When they should seek professional medical help instead
-5. Additional lifestyle recommendations that complement herbal treatment
-
-Be thorough, evidence-based, and always prioritize safety. Emphasize that this is educational information and not a substitute for professional medical advice.`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            recommended_herbs: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  herb_name: { type: "string" },
-                  botanical_name: { type: "string" },
-                  reason: { type: "string" },
-                  preparation: { type: "string" },
-                  dosage: { type: "string" }
-                }
-              }
-            },
-            safety_warnings: { type: "array", items: { type: "string" } },
-            seek_medical_help_if: { type: "array", items: { type: "string" } },
-            lifestyle_recommendations: { type: "array", items: { type: "string" } },
-            general_advice: { type: "string" }
-          }
-        }
-      });
-
+      const result = await api.ai.assistant({ symptoms });
       setAiResponse(result);
     } catch (error) {
       console.error("AI assistant error:", error);
-      alert("Failed to get recommendations. Please try again.");
+      alert(error?.message ?? "Failed to get recommendations. Please try again.");
     }
 
     setLoading(false);

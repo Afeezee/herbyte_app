@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,7 +18,7 @@ export default function WishlistPage() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("Error fetching user:", error);
@@ -33,7 +33,7 @@ export default function WishlistPage() {
     queryKey: ['wishlist-all', user?.email],
     queryFn: async () => {
       if (!user?.email) return [];
-      return await base44.entities.Wishlist.filter({ user_email: user.email }, '-created_date');
+      return await api.entities.Wishlist.filter({ user_email: user.email }, '-created_date');
     },
     enabled: !!user?.email,
     initialData: [],
@@ -41,7 +41,7 @@ export default function WishlistPage() {
 
   // Delete mutation
   const removeFromWishlistMutation = useMutation({
-    mutationFn: (id) => base44.entities.Wishlist.delete(id),
+    mutationFn: (id) => api.entities.Wishlist.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist-all'] });
       queryClient.invalidateQueries({ queryKey: ['wishlist-item'] });
@@ -77,7 +77,7 @@ export default function WishlistPage() {
             <p className="text-gray-600 mb-6">
               Sign in to save and view your favorite herbs, remedies, and products.
             </p>
-            <Button onClick={() => base44.auth.redirectToLogin(window.location.href)}>
+            <Button onClick={() => api.auth.redirectToLogin(window.location.href)}>
               Sign In
             </Button>
           </CardContent>

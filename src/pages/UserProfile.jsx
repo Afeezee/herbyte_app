@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,7 +23,7 @@ export default function UserProfile() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("Error fetching user:", error);
@@ -38,7 +38,7 @@ export default function UserProfile() {
     queryKey: ['user-comments', user?.email],
     queryFn: async () => {
       if (!user?.email) return [];
-      return await base44.entities.Comment.filter({ author_email: user.email }, '-created_date');
+      return await api.entities.Comment.filter({ author_email: user.email }, '-created_date');
     },
     enabled: !!user?.email,
     initialData: [],
@@ -49,7 +49,7 @@ export default function UserProfile() {
     queryKey: ['user-herbs', user?.email],
     queryFn: async () => {
       if (!user?.email) return [];
-      const allHerbs = await base44.entities.Herb.list();
+      const allHerbs = await api.entities.Herb.list();
       return allHerbs.filter(herb => herb.created_by === user.email);
     },
     enabled: !!user?.email,
@@ -61,7 +61,7 @@ export default function UserProfile() {
     queryKey: ['user-remedies', user?.email],
     queryFn: async () => {
       if (!user?.email) return [];
-      const allRemedies = await base44.entities.Remedy.list();
+      const allRemedies = await api.entities.Remedy.list();
       return allRemedies.filter(remedy => remedy.created_by === user.email);
     },
     enabled: !!user?.email,
@@ -73,7 +73,7 @@ export default function UserProfile() {
     queryKey: ['seller-profile', user?.seller_profile_id],
     queryFn: async () => {
       if (!user?.seller_profile_id) return null;
-      const profiles = await base44.entities.SellerProfile.filter({ id: user.seller_profile_id });
+      const profiles = await api.entities.SellerProfile.filter({ id: user.seller_profile_id });
       return profiles[0];
     },
     enabled: !!user?.seller_profile_id,
@@ -84,7 +84,7 @@ export default function UserProfile() {
     queryKey: ['user-products', sellerProfile?.id],
     queryFn: async () => {
       if (!sellerProfile?.id) return [];
-      return await base44.entities.Product.filter({ seller_id: sellerProfile.id });
+      return await api.entities.Product.filter({ seller_id: sellerProfile.id });
     },
     enabled: !!sellerProfile?.id,
     initialData: [],
@@ -95,7 +95,7 @@ export default function UserProfile() {
     queryKey: ['user-wishlist-stats', user?.email],
     queryFn: async () => {
       if (!user?.email) return [];
-      return await base44.entities.Wishlist.filter({ user_email: user.email });
+      return await api.entities.Wishlist.filter({ user_email: user.email });
     },
     enabled: !!user?.email,
     initialData: [],
@@ -103,7 +103,7 @@ export default function UserProfile() {
 
   // Delete mutations
   const deleteHerbMutation = useMutation({
-    mutationFn: (id) => base44.entities.Herb.delete(id),
+    mutationFn: (id) => api.entities.Herb.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-herbs'] });
       alert("Herb deleted successfully!");
@@ -111,7 +111,7 @@ export default function UserProfile() {
   });
 
   const deleteRemedyMutation = useMutation({
-    mutationFn: (id) => base44.entities.Remedy.delete(id),
+    mutationFn: (id) => api.entities.Remedy.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-remedies'] });
       alert("Remedy deleted successfully!");
@@ -119,7 +119,7 @@ export default function UserProfile() {
   });
 
   const deleteProductMutation = useMutation({
-    mutationFn: (id) => base44.entities.Product.delete(id),
+    mutationFn: (id) => api.entities.Product.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-products'] });
       alert("Product deleted successfully!");
@@ -162,7 +162,7 @@ export default function UserProfile() {
             <p className="text-gray-600 mb-6">
               You need to be signed in to view your profile.
             </p>
-            <Button onClick={() => base44.auth.redirectToLogin(window.location.href)}>
+            <Button onClick={() => api.auth.redirectToLogin(window.location.href)}>
               Sign In
             </Button>
           </CardContent>

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,7 @@ export default function OrganizeEvent() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
         setFormData(prev => ({
           ...prev,
@@ -64,7 +64,7 @@ export default function OrganizeEvent() {
   }, []);
 
   const createEventMutation = useMutation({
-    mutationFn: (eventData) => base44.entities.Event.create(eventData),
+    mutationFn: (eventData) => api.entities.Event.create(eventData),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       setCreatedEventId(data.id);
@@ -78,7 +78,7 @@ export default function OrganizeEvent() {
 
     setUploadingImage(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await api.integrations.Core.UploadFile({ file });
       setUploadedImage(file_url);
     } catch (error) {
       console.error("Image upload error:", error);
@@ -91,7 +91,7 @@ export default function OrganizeEvent() {
     e.preventDefault();
 
     if (!user) {
-      base44.auth.redirectToLogin(window.location.href);
+      api.auth.redirectToLogin(window.location.href);
       return;
     }
 
@@ -127,7 +127,7 @@ export default function OrganizeEvent() {
               You need to be signed in to organize events on Herbyte.
             </p>
             <Button 
-              onClick={() => base44.auth.redirectToLogin(window.location.href)}
+              onClick={() => api.auth.redirectToLogin(window.location.href)}
               className="bg-[#4A7C2E] hover:bg-[#2D5016]"
             >
               Sign In to Continue

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,7 @@ export default function AdminDashboard() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("Error fetching user:", error);
@@ -44,85 +44,85 @@ export default function AdminDashboard() {
   // Fetch all data
   const { data: herbs = [] } = useQuery({
     queryKey: ['admin-herbs'],
-    queryFn: () => base44.entities.Herb.list('-created_date'),
+    queryFn: () => api.entities.Herb.list('-created_date'),
     enabled: user?.role === 'admin',
   });
 
   const { data: remedies = [] } = useQuery({
     queryKey: ['admin-remedies'],
-    queryFn: () => base44.entities.Remedy.list('-created_date'),
+    queryFn: () => api.entities.Remedy.list('-created_date'),
     enabled: user?.role === 'admin',
   });
 
   const { data: products = [] } = useQuery({
     queryKey: ['admin-products'],
-    queryFn: () => base44.entities.Product.list('-created_date'),
+    queryFn: () => api.entities.Product.list('-created_date'),
     enabled: user?.role === 'admin',
   });
 
   const { data: events = [] } = useQuery({
     queryKey: ['admin-events'],
-    queryFn: () => base44.entities.Event.list('-created_date'),
+    queryFn: () => api.entities.Event.list('-created_date'),
     enabled: user?.role === 'admin',
   });
 
   const { data: comments = [] } = useQuery({
     queryKey: ['admin-comments'],
-    queryFn: () => base44.entities.Comment.list('-created_date'),
+    queryFn: () => api.entities.Comment.list('-created_date'),
     enabled: user?.role === 'admin',
   });
 
   const { data: users = [] } = useQuery({
     queryKey: ['admin-users'],
-    queryFn: () => base44.entities.User.list('-created_date'),
+    queryFn: () => api.entities.User.list('-created_date'),
     enabled: user?.role === 'admin',
   });
 
   const { data: sellers = [] } = useQuery({
     queryKey: ['admin-sellers'],
-    queryFn: () => base44.entities.SellerProfile.list('-created_date'),
+    queryFn: () => api.entities.SellerProfile.list('-created_date'),
     enabled: user?.role === 'admin',
   });
 
   const { data: wishlists = [] } = useQuery({
     queryKey: ['admin-wishlists'],
-    queryFn: () => base44.entities.Wishlist.list('-created_date'),
+    queryFn: () => api.entities.Wishlist.list('-created_date'),
     enabled: user?.role === 'admin',
   });
 
   // Delete mutations
   const deleteHerbMutation = useMutation({
-    mutationFn: (id) => base44.entities.Herb.delete(id),
+    mutationFn: (id) => api.entities.Herb.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-herbs'] }),
   });
 
   const deleteRemedyMutation = useMutation({
-    mutationFn: (id) => base44.entities.Remedy.delete(id),
+    mutationFn: (id) => api.entities.Remedy.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-remedies'] }),
   });
 
   const deleteProductMutation = useMutation({
-    mutationFn: (id) => base44.entities.Product.delete(id),
+    mutationFn: (id) => api.entities.Product.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-products'] }),
   });
 
   const deleteEventMutation = useMutation({
-    mutationFn: (id) => base44.entities.Event.delete(id),
+    mutationFn: (id) => api.entities.Event.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-events'] }),
   });
 
   const deleteCommentMutation = useMutation({
-    mutationFn: (id) => base44.entities.Comment.delete(id),
+    mutationFn: (id) => api.entities.Comment.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-comments'] }),
   });
 
   const updateProductMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Product.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.Product.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-products'] }),
   });
 
   const updateSellerMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.SellerProfile.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.SellerProfile.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-sellers'] }),
   });
 

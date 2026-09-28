@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,7 +23,7 @@ export default function Contact() {
     setSending(true);
 
     try {
-      await base44.integrations.Core.SendEmail({
+      await api.integrations.Core.SendEmail({
         from_name: formData.name,
         to: "hello@herbyte.com",
         subject: `Herbyte Contact Form: ${formData.subject}`,

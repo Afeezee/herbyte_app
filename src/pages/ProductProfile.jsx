@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +24,7 @@ export default function ProductProfile() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const currentUser = await base44.auth.me();
+        const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch (error) {
         console.error("Error fetching user:", error);
@@ -36,7 +36,7 @@ export default function ProductProfile() {
   const { data: product, isLoading: productLoading } = useQuery({
     queryKey: ['product', productId],
     queryFn: async () => {
-      const products = await base44.entities.Product.filter({ id: productId });
+      const products = await api.entities.Product.filter({ id: productId });
       return products[0];
     },
     enabled: !!productId,
@@ -45,7 +45,7 @@ export default function ProductProfile() {
   const { data: seller, isLoading: sellerLoading } = useQuery({
     queryKey: ['seller', product?.seller_id],
     queryFn: async () => {
-      const sellers = await base44.entities.SellerProfile.filter({ id: product.seller_id });
+      const sellers = await api.entities.SellerProfile.filter({ id: product.seller_id });
       return sellers[0];
     },
     enabled: !!product?.seller_id,
@@ -55,14 +55,14 @@ export default function ProductProfile() {
     queryKey: ['remedy-for-product', product?.linked_remedy_id],
     queryFn: async () => {
       if (!product?.linked_remedy_id) return null;
-      const remedies = await base44.entities.Remedy.filter({ id: product.linked_remedy_id });
+      const remedies = await api.entities.Remedy.filter({ id: product.linked_remedy_id });
       return remedies[0];
     },
     enabled: !!product?.linked_remedy_id,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => base44.entities.Product.delete(productId),
+    mutationFn: () => api.entities.Product.delete(productId),
     onSuccess: () => {
       alert("Product deleted successfully!");
       window.location.href = createPageUrl("ExploreProducts");

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useAuth as useClerkAuth, useUser as useClerkUser, useClerk } from '@clerk/clerk-react'
-import { base44 } from '@/api/base44Client'
+import { api } from '@/api/client'
 
 /**
  * AuthContext exposes the exact shape App.jsx and existing pages already
@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoadingAuth(true)
       setAuthError(null)
-      const me = await base44.auth.me()
+      const me = await api.auth.me()
       setDbUser(me)
     } catch (err) {
       setDbUser(null)

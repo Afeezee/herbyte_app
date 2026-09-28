@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,55 +24,30 @@ export default function AIPersonalizedInsight({ herb, onClose }) {
     setLoading(true);
 
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `As a knowledgeable herbalist and medical safety expert, analyze whether ${herb.common_name} (${herb.botanical_name}) is appropriate for this person:
-
-User Profile:
-- Age: ${formData.age || "Not specified"}
-- Health Condition: ${formData.health_condition}
-- Current Medications: ${formData.current_medications || "None specified"}
-- Known Allergies: ${formData.allergies || "None specified"}
-- Additional Information: ${formData.additional_info || "None"}
-
-Herb Information:
-- Description: ${herb.description}
-- Health Benefits: ${herb.health_benefits?.map(b => b.benefit).join(", ") || "Not specified"}
-- Conditions Treated: ${herb.conditions_treated?.join(", ") || "Not specified"}
-- Drug Interactions: ${herb.drug_interactions?.join(", ") || "None known"}
-- Contraindications: ${herb.contraindications?.join(", ") || "None known"}
-- Side Effects: ${herb.side_effects?.join(", ") || "None known"}
-- Safety Rating: ${herb.safety_rating}
-
-Provide:
-1. A clear recommendation (suitable/use with caution/not recommended)
-2. Specific reasons based on their profile
-3. Potential risks or interactions
-4. Alternative herbs if not suitable
-5. Dosage guidance if appropriate
-6. Whether they should consult a healthcare professional
-
-Be thorough, safety-focused, and honest about limitations of herbal medicine.`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            recommendation: {
-              type: "string",
-              enum: ["Suitable", "Use with Caution", "Not Recommended", "Consult Healthcare Professional"]
-            },
-            reasoning: { type: "string" },
-            potential_risks: { type: "array", items: { type: "string" } },
-            alternative_herbs: { type: "array", items: { type: "string" } },
-            dosage_guidance: { type: "string" },
-            professional_consultation_needed: { type: "boolean" },
-            additional_notes: { type: "string" }
-          }
-        }
+      const result = await api.ai.herbInsight({
+        herb: {
+          common_name: herb.common_name,
+          botanical_name: herb.botanical_name,
+          description: herb.description,
+          health_benefits: herb.health_benefits,
+          conditions_treated: herb.conditions_treated,
+          drug_interactions: herb.drug_interactions,
+          contraindications: herb.contraindications,
+          side_effects: herb.side_effects,
+          safety_rating: herb.safety_rating,
+        },
+        profile: {
+          age: formData.age,
+          health_condition: formData.health_condition,
+          current_medications: formData.current_medications,
+          allergies: formData.allergies,
+          additional_info: formData.additional_info,
+        },
       });
-
       setAiResponse(result);
     } catch (error) {
       console.error("AI analysis error:", error);
-      alert("Failed to get AI insight. Please try again.");
+      alert(error?.message ?? "Failed to get AI insight. Please try again.");
     }
 
     setLoading(false);
