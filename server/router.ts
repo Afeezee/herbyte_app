@@ -7,6 +7,8 @@ import { authRoutes, clerkWebhook } from "./routes/auth";
 import { entitiesRoutes } from "./routes/entities";
 import { aiRoutes } from "./routes/ai";
 import { submissionRoutes } from "./routes/submissions";
+import { uploadRoutes } from "./routes/upload";
+import { contactRoutes } from "./routes/contact";
 
 // -----------------------------------------------------------------------------
 // Shape mirrors what the Base44 SDK exposed: JSON responses, {error:{code,message}}
@@ -88,14 +90,9 @@ app.route("/api/ai", aiRoutes);
 // Phase 5 — submission pipeline
 app.route("/api/submissions", submissionRoutes);
 
-// Phase 6
-app.post("/api/upload", async () => {
-  throw new HTTPException(501, { message: "upload not implemented yet" });
-});
-
-app.post("/api/contact", async () => {
-  throw new HTTPException(501, { message: "contact not implemented yet" });
-});
+// Phase 6 — uploads + contact form
+app.route("/api/upload", uploadRoutes);
+app.route("/api/contact", contactRoutes);
 
 // Cron and webhooks (phases 4/2)
 app.post("/api/cron/moderation-retry", async (c) => {
