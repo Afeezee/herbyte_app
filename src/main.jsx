@@ -1,22 +1,25 @@
-import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { ClerkProvider } from '@clerk/clerk-react'
 import App from '@/App.jsx'
 import '@/index.css'
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  // <React.StrictMode>
-  <App />
-  // </React.StrictMode>,
-)
+const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-if (import.meta.hot) {
-  import.meta.hot.on('vite:beforeUpdate', () => {
-    window.parent?.postMessage({ type: 'sandbox:beforeUpdate' }, '*');
-  });
-  import.meta.hot.on('vite:afterUpdate', () => {
-    window.parent?.postMessage({ type: 'sandbox:afterUpdate' }, '*');
-  });
+if (!publishableKey) {
+  // Loud in dev, doesn't crash render — you'll see a Clerk sign-in error
+  // instead of a blank page.
+  console.error(
+    '[herbyte] VITE_CLERK_PUBLISHABLE_KEY is not set. Copy .env.example to .env and fill it in.',
+  )
 }
 
-
-
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ClerkProvider
+    publishableKey={publishableKey ?? ''}
+    signInUrl="/sign-in"
+    afterSignInUrl="/"
+    afterSignOutUrl="/sign-in"
+  >
+    <App />
+  </ClerkProvider>,
+)

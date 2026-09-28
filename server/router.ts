@@ -3,6 +3,8 @@ import { HTTPException } from "hono/http-exception";
 import { cors } from "hono/cors";
 import { AuthError, requireUser, type SessionUser } from "./auth";
 import { getEnv } from "./env";
+import { authRoutes, clerkWebhook } from "./routes/auth";
+import { entitiesRoutes } from "./routes/entities";
 
 // -----------------------------------------------------------------------------
 // Shape mirrors what the Base44 SDK exposed: JSON responses, {error:{code,message}}
@@ -69,19 +71,14 @@ async function authMiddleware(
 // Route placeholders — implemented in phases 2–6.
 // -----------------------------------------------------------------------------
 
-// Phase 2
-app.get("/api/auth/me", (c) => {
-  return c.json(c.var.user);
-});
+// Phase 2 — auth self endpoints
+app.route("/api/auth", authRoutes);
 
-app.patch("/api/auth/me", async () => {
-  throw new HTTPException(501, { message: "auth/me PATCH not implemented yet" });
-});
+// Clerk webhook (svix-signed, no session)
+app.route("/api/webhooks/clerk", clerkWebhook);
 
-// Phase 3
-app.all("/api/entities/*", async () => {
-  throw new HTTPException(501, { message: "entities router not implemented yet" });
-});
+// Phase 3 — generic entity CRUD
+app.route("/api/entities", entitiesRoutes);
 
 // Phase 4
 app.post("/api/ai/*", async () => {
@@ -111,10 +108,6 @@ app.post("/api/cron/moderation-retry", async (c) => {
     throw new HTTPException(401, { message: "Unauthorized" });
   }
   return c.json({ ok: true, retried: 0 });
-});
-
-app.post("/api/webhooks/clerk", async () => {
-  throw new HTTPException(501, { message: "clerk webhook not implemented yet" });
 });
 
 // -----------------------------------------------------------------------------
