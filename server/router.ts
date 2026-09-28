@@ -6,6 +6,7 @@ import { getEnv } from "./env";
 import { authRoutes, clerkWebhook } from "./routes/auth";
 import { entitiesRoutes } from "./routes/entities";
 import { aiRoutes } from "./routes/ai";
+import { submissionRoutes } from "./routes/submissions";
 
 // -----------------------------------------------------------------------------
 // Shape mirrors what the Base44 SDK exposed: JSON responses, {error:{code,message}}
@@ -84,10 +85,8 @@ app.route("/api/entities", entitiesRoutes);
 // Phase 4 — AI advice endpoints
 app.route("/api/ai", aiRoutes);
 
-// Phase 5
-app.post("/api/submissions/*", async () => {
-  throw new HTTPException(501, { message: "submissions not implemented yet" });
-});
+// Phase 5 — submission pipeline
+app.route("/api/submissions", submissionRoutes);
 
 // Phase 6
 app.post("/api/upload", async () => {
