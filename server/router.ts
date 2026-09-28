@@ -5,6 +5,7 @@ import { AuthError, requireUser, type SessionUser } from "./auth";
 import { getEnv } from "./env";
 import { authRoutes, clerkWebhook } from "./routes/auth";
 import { entitiesRoutes } from "./routes/entities";
+import { aiRoutes } from "./routes/ai";
 
 // -----------------------------------------------------------------------------
 // Shape mirrors what the Base44 SDK exposed: JSON responses, {error:{code,message}}
@@ -80,10 +81,8 @@ app.route("/api/webhooks/clerk", clerkWebhook);
 // Phase 3 — generic entity CRUD
 app.route("/api/entities", entitiesRoutes);
 
-// Phase 4
-app.post("/api/ai/*", async () => {
-  throw new HTTPException(501, { message: "AI endpoints not implemented yet" });
-});
+// Phase 4 — AI advice endpoints
+app.route("/api/ai", aiRoutes);
 
 // Phase 5
 app.post("/api/submissions/*", async () => {
