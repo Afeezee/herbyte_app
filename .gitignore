@@ -28,4 +28,15 @@ dist-ssr
 *.sw?
 
 .env
+!.env.example
 base44/.app.jsonc
+
+# Vercel
+.vercel
+
+# Drizzle
+drizzle/meta/
+
+# Migration data — imported from Base44 exports; keep out of git
+migration-data/*.json
+!migration-data/README.md
