@@ -23,7 +23,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, isNotNull, sql } from "drizzle-orm";
 import * as schema from "../server/schema";
 
 // ---------------------------------------------------------------------------
@@ -109,6 +109,55 @@ function log(msg: string) {
   process.stdout.write(`${msg}\n`);
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A running map of legacy_id → new UUID per table, built during the run.
+ * Foreign-key columns that reference other entities (e.g.
+ * remedies.primary_herb_id → herbs.id) get their legacy Base44 hex-ish
+ * ids translated to real UUIDs through this table.
+ */
+const legacyToUuid: Record<string, Record<string, string>> = {
+  herbs: {},
+  remedies: {},
+  seller_profiles: {},
+  events: {},
+  products: {},
+  comments: {},
+  users: {},
+};
+
+/**
+ * Which columns on each table reference which other table.
+ * Only listed columns are rewritten; anything else in the incoming row is
+ * either a real UUID already, an empty string (→ null), or a value that
+ * has no local mapping yet (→ null).
+ */
+const FK_MAP: Record<string, Record<string, string>> = {
+  remedies: { primary_herb_id: "herbs" },
+  products: {
+    seller_id: "seller_profiles",
+    linked_remedy_id: "remedies",
+  },
+  comments: { parent_comment_id: "comments" }, // entity_id handled per-row (polymorphic)
+  wishlists: {}, // entity_id polymorphic — best-effort per-row
+  seller_profiles: {},
+  events: {},
+  herbs: {},
+};
+
+/**
+ * Given a value for a uuid column, return either:
+ * - the value unchanged if it's already a valid UUID,
+ * - the translated UUID if we have a legacy_id → uuid mapping for it,
+ * - null if we can't resolve it (empty string, unknown legacy id).
+ */
+function resolveUuid(value: unknown, targetTable: string): string | null {
+  if (typeof value !== "string" || value.length === 0) return null;
+  if (UUID_RE.test(value)) return value;
+  return legacyToUuid[targetTable]?.[value] ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Per-entity importers. Each returns {inserted, updated, skipped}.
 // ---------------------------------------------------------------------------
@@ -171,6 +220,7 @@ async function importUsers(db: Db, rows: LegacyRow[], opts: CliOpts): Promise<Co
 async function upsertGeneric(
   db: Db,
   table: keyof typeof schema,
+  tableSqlName: string,
   rows: LegacyRow[],
   opts: CliOpts,
   { legacyIdField = "id", extraDefaults = {} }: {
@@ -179,11 +229,9 @@ async function upsertGeneric(
   } = {},
 ): Promise<Counts> {
   const c: Counts = { inserted: 0, updated: 0, skipped: 0 };
-  const tbl = schema[table] as unknown as {
-    _: { columns: Record<string, unknown> };
-    legacy_id: unknown;
-  };
-  const cols = new Set(Object.keys(tbl._.columns));
+  const tbl = schema[table] as unknown as { legacy_id: unknown };
+  const cols = new Set(Object.keys(getTableColumns(schema[table] as never)));
+  const fkCols = FK_MAP[tableSqlName] ?? {};
 
   for (const row of rows) {
     if (!opts.includeSamples && row.is_sample) {
@@ -201,8 +249,39 @@ async function upsertGeneric(
     for (const [k, v] of Object.entries(cleaned)) {
       if (cols.has(k)) values[k] = v;
     }
-    // Lowercase any created_by that looks like an email — matches how
-    // resolveSessionUser stores it later.
+
+    // Translate FK columns from legacy hex ids → new UUIDs.
+    for (const [fkCol, targetTable] of Object.entries(fkCols)) {
+      if (fkCol in values) {
+        values[fkCol] = resolveUuid(values[fkCol], targetTable);
+      }
+    }
+
+    // Polymorphic entity_id (Comment, Wishlist): translate against the
+    // right target table based on entity_type. If we can't resolve,
+    // skip the row — polymorphic FKs to unresolved entities are useless.
+    if ("entity_id" in values && "entity_type" in values) {
+      const target = String(values.entity_type ?? "").toLowerCase();
+      const map: Record<string, string> = {
+        herb: "herbs",
+        remedy: "remedies",
+        product: "products",
+        event: "events",
+      };
+      const targetTable = map[target];
+      if (targetTable) {
+        values.entity_id = resolveUuid(values.entity_id, targetTable);
+        if (!values.entity_id) {
+          c.skipped++;
+          continue;
+        }
+      }
+    }
+
+    // Drop the top-level id — Postgres generates a new UUID.
+    delete values.id;
+
+    // Lowercase any email-like fields.
     if (typeof values.created_by === "string" && values.created_by.includes("@")) {
       values.created_by = (values.created_by as string).toLowerCase();
     }
@@ -223,32 +302,42 @@ async function upsertGeneric(
     }
 
     const targetCol = tbl.legacy_id as never;
-    const buildSet = (): Record<string, unknown> => {
+    // Check for existing row by legacy_id. Two round-trips per row is
+    // fine for the 25-row seed we ship with; the alternative
+    // (ON CONFLICT on a partial unique index) doesn't cooperate with
+    // Drizzle's inference.
+    const existing = (await db
+      .select({ id: (schema[table] as never as { id: unknown }).id as never })
+      .from(schema[table] as never)
+      .where(eq(targetCol, legacyId as never))
+      .limit(1)) as unknown as Array<{ id: string }>;
+
+    let rowId: string;
+    if (existing[0]) {
       const set: Record<string, unknown> = { updated_date: sql`now()` };
       for (const [k, v] of Object.entries(values)) {
         if (k === "legacy_id" || k === "id") continue;
         set[k] = v;
       }
-      return set;
-    };
+      await db
+        .update(schema[table] as never)
+        .set(set as never)
+        .where(eq(targetCol, legacyId as never));
+      rowId = existing[0].id;
+      c.updated++;
+    } else {
+      const inserted = (await db
+        .insert(schema[table] as never)
+        .values(values as never)
+        .returning()) as unknown as Array<{ id: string }>;
+      rowId = inserted[0]?.id ?? "";
+      c.inserted++;
+    }
 
-    const result = await (db.insert(schema[table] as never) as never as {
-      values: (v: never) => never;
-    } as unknown as {
-      values(v: unknown): {
-        onConflictDoUpdate(o: unknown): { returning(): Promise<Array<{ id: string }>> };
-      };
-    })
-      .values(values)
-      .onConflictDoUpdate({
-        target: targetCol,
-        set: buildSet(),
-        setWhere: isNotNull(targetCol as never),
-      })
-      .returning();
-
-    if (result.length > 0) c.inserted++;
-    else c.updated++;
+    // Record legacy → new-uuid mapping so later tables can resolve FKs.
+    if (rowId && legacyToUuid[tableSqlName]) {
+      legacyToUuid[tableSqlName]![legacyId] = rowId;
+    }
   }
   return c;
 }
@@ -284,47 +373,47 @@ async function main() {
     {
       file: "SellerProfile",
       label: "seller_profiles",
-      fn: (rows) => upsertGeneric(db, "sellerProfiles", rows, opts),
+      fn: (rows) => upsertGeneric(db, "sellerProfiles", "seller_profiles", rows, opts),
     },
     {
       file: "Herb",
       label: "herbs",
-      fn: (rows) => upsertGeneric(db, "herbs", rows, opts),
+      fn: (rows) => upsertGeneric(db, "herbs", "herbs", rows, opts),
     },
     {
       file: "Remedy",
       label: "remedies",
-      fn: (rows) => upsertGeneric(db, "remedies", rows, opts),
+      fn: (rows) => upsertGeneric(db, "remedies", "remedies", rows, opts),
     },
     {
       file: "Product",
       label: "products",
-      fn: (rows) => upsertGeneric(db, "products", rows, opts),
+      fn: (rows) => upsertGeneric(db, "products", "products", rows, opts),
     },
     {
       file: "Event",
       label: "events",
-      fn: (rows) => upsertGeneric(db, "events", rows, opts),
+      fn: (rows) => upsertGeneric(db, "events", "events", rows, opts),
     },
     {
       file: "Comment",
       label: "comments",
-      fn: (rows) => upsertGeneric(db, "comments", rows, opts),
+      fn: (rows) => upsertGeneric(db, "comments", "comments", rows, opts),
     },
     {
       file: "RemedySubmission",
       label: "remedy_submissions",
-      fn: (rows) => upsertGeneric(db, "remedySubmissions", rows, opts),
+      fn: (rows) => upsertGeneric(db, "remedySubmissions", "remedy_submissions", rows, opts),
     },
     {
       file: "HerbSubmission",
       label: "herb_submissions",
-      fn: (rows) => upsertGeneric(db, "herbSubmissions", rows, opts),
+      fn: (rows) => upsertGeneric(db, "herbSubmissions", "herb_submissions", rows, opts),
     },
     {
       file: "Wishlist",
       label: "wishlists",
-      fn: (rows) => upsertGeneric(db, "wishlists", rows, opts),
+      fn: (rows) => upsertGeneric(db, "wishlists", "wishlists", rows, opts),
     },
   ];
 
