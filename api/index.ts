@@ -1,13 +1,4 @@
-/**
- * Vercel Function entry point. All /api/* traffic hits this file via the
- * rewrite in vercel.json.
- *
- * Hono ships an adapter for the Vercel Edge/Node runtime, but the default
- * Node runtime works fine with `handle` from `hono/vercel`.
- */
-import { handle } from "hono/vercel";
-import { app } from "../server/router";
-
-export const config = { runtime: "nodejs" };
-
-export default handle(app);
+// Auto-populated by scripts/build-api.mjs at build time.
+// Runtime: the real handler is bundled into ./_bundle.js.
+// Locally, run `npm run build:api` before `vercel dev`.
+export { default, config } from "./_bundle.js";
