@@ -4,24 +4,30 @@
  *
  * Why: Vercel's @vercel/node builder compiles TS in api/ but doesn't
  * traverse into ../server/ to compile shared code — the runtime import
- * of ../server/router fails with ERR_MODULE_NOT_FOUND. Bundling
- * everything into one file sidesteps that. api/index.ts is a permanent
- * stub that re-exports from the bundle.
+ * of ../server/router fails with ERR_MODULE_NOT_FOUND. Bundling only
+ * our own server code (with every node_module left external) sidesteps
+ * both that AND the CJS-vs-ESM require() interop that hits undici when
+ * bundled. api/index.ts is a permanent stub that re-exports from the
+ * bundle.
  */
 import { build } from "esbuild";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
 const entry = path.join(root, "server", "vercel-entry.ts");
 const out = path.join(root, "api", "_bundle.js");
 
-// Node built-ins only. Everything else — hono, drizzle, @clerk/backend,
-// @neondatabase/serverless, svix, resend, zod, @vercel/blob — gets
-// bundled so the deployed function is self-contained.
+const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+
+// Only inline server/*.ts source. Every third-party dep stays external
+// and is resolved from node_modules at runtime, which is what
+// @vercel/node already ships.
 const external = [
   "node:*",
-  // Optional native/global-only deps we don't use, but a transitive
-  // pull-in shouldn't fail the bundle.
+  ...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).flatMap(
+    (name) => [name, `${name}/*`],
+  ),
 ];
 
 await build({
