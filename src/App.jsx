@@ -6,6 +6,7 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 import { SignIn, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react'
 import PageNotFound from './lib/PageNotFound'
+import PublicLanding from './pages/PublicLanding'
 import { AuthProvider, useAuth } from '@/lib/AuthContext'
 
 const { Pages, Layout, mainPage } = pagesConfig
@@ -56,11 +57,28 @@ function App() {
             path="/sign-up/*"
             element={
               <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-lime-50 p-4">
-                {/* Reuse SignIn; Clerk shows Sign Up tab via routing */}
                 <SignIn routing="path" path="/sign-up" />
               </div>
             }
           />
+          {/* Landing page — public when signed out, real Home when signed in. */}
+          <Route
+            path="/"
+            element={
+              <>
+                <SignedIn>
+                  <AuthProvider>
+                    <AuthenticatedApp />
+                  </AuthProvider>
+                </SignedIn>
+                <SignedOut>
+                  <PublicLanding />
+                </SignedOut>
+              </>
+            }
+          />
+          {/* Every other route requires sign-in. Signed-out visitors get
+              bounced through Clerk and returned to what they were opening. */}
           <Route
             path="/*"
             element={
