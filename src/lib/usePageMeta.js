@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 const SITE_NAME = 'Herbyte'
 const DEFAULT_DESCRIPTION =
   'A community-built herbal-medicine reference: herbs, remedies, seller marketplace and workshops — with evidence ratings and drug-interaction checks.'
-const DEFAULT_OG_IMAGE = 'https://herbyte.cereustechnologies.com/og.svg'
+const DEFAULT_OG_IMAGE = 'https://herbyte.cereustechnologies.com/og.png'
 
 /**
  * Set the browser tab title, meta description and Open Graph tags for
