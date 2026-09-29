@@ -17,6 +17,7 @@ import CommentSection from "../components/shared/CommentSection";
 import WishlistButton from "../components/shared/WishlistButton";
 import ShareButtons from "../components/shared/ShareButtons";
 import EditHerbModal from "../components/shared/EditHerbModal";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function HerbProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -46,6 +47,12 @@ export default function HerbProfile() {
       return herbs[0];
     },
     enabled: !!herbId,
+  });
+
+  usePageMeta({
+    title: herb?.common_name,
+    description: herb?.description,
+    image: herb?.image_url,
   });
 
   const deleteMutation = useMutation({

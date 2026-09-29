@@ -10,8 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Send, Loader2, CheckCircle, AlertTriangle, Info, Upload, X, Beaker, Leaf, User as UserIcon } from "lucide-react";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function SubmitRemedy() {
+  usePageMeta({ title: "Submit a Remedy" });
   const [activeTab, setActiveTab] = useState("remedy");
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);

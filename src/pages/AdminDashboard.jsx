@@ -11,6 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend
 } from "recharts";
+import { usePageMeta } from "@/lib/usePageMeta";
 import {
   Shield, Users, Leaf, Beaker, Package, Calendar, MessageCircle,
   TrendingUp, Eye, Heart, Trash2, CheckCircle, XCircle, Clock,
@@ -23,6 +24,7 @@ import { createPageUrl } from "@/utils";
 const COLORS = ['#4A7C2E', '#2D5016', '#6B9F4A', '#8BC34A', '#CDDC39'];
 
 export default function AdminDashboard() {
+  usePageMeta({ title: "Admin Dashboard" });
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");

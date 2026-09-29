@@ -8,12 +8,14 @@ import { Calendar, Plus, Search, Filter, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import EventCard from "../components/events/EventCard";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 const EVENT_TYPES = ["All", "Workshop", "Webinar", "Conference", "Community Gathering", "Plant Walk", "Wellness Fair", "Education Session", "Other"];
 const LOCATION_TYPES = ["All", "In-Person", "Virtual", "Hybrid"];
 const STATUS_FILTERS = ["All", "Upcoming", "Ongoing", "Completed"];
 
 export default function EventsPage() {
+  usePageMeta({ title: "Events" });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("All");
   const [selectedLocation, setSelectedLocation] = useState("All");

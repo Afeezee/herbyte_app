@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Filter, X, ShoppingBag } from "lucide-react";
 import ProductCard from "../components/products/ProductCard";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 const PRODUCT_TYPES = ["All", "Tea Blend", "Tincture", "Salve", "Capsules", "Extract", "Powder", "Oil", "Cream", "Other"];
 
 export default function ExploreProducts() {
+  usePageMeta({ title: "Marketplace" });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("All");
   const [showFilters, setShowFilters] = useState(false);

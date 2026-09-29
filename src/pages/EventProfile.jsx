@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { format } from "date-fns";
 import CommentSection from "../components/shared/CommentSection";
+import { usePageMeta } from "@/lib/usePageMeta";
 import WishlistButton from "../components/shared/WishlistButton";
 import ShareButtons from "../components/shared/ShareButtons";
 
@@ -41,6 +42,12 @@ export default function EventProfile() {
       return events[0];
     },
     enabled: !!eventId,
+  });
+
+  usePageMeta({
+    title: event?.title,
+    description: event?.description,
+    image: event?.image_url,
   });
 
   const deleteMutation = useMutation({

@@ -1,8 +1,10 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Shield, Users, BookOpen, Sparkles, Target, Heart, Beaker, Leaf, ShoppingBag } from "lucide-react";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function About() {
+  usePageMeta({ title: "About" });
   return (
     <div className="min-h-screen">
       {/* Hero Section */}

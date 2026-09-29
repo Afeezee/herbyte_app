@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f0fdf4"/>
+      <stop offset="100%" stop-color="#d9f4c7"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4A7C2E"/>
+      <stop offset="100%" stop-color="#2D5016"/>
+    </linearGradient>
+    <pattern id="dots" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse">
+      <circle cx="30" cy="30" r="1.5" fill="#4A7C2E" opacity="0.08"/>
+    </pattern>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#dots)"/>
+
+  <!-- decorative leaves -->
+  <g opacity="0.10" fill="url(#leaf)">
+    <path d="M 950 60 C 1060 120, 1120 240, 1080 360 C 1060 300, 1000 220, 940 200 C 970 160, 970 110, 950 60 Z"/>
+    <path d="M 90 480 C 200 540, 260 620, 240 700 C 220 640, 180 580, 140 560 C 130 530, 110 500, 90 480 Z"/>
+  </g>
+
+  <!-- leaf icon in a circle -->
+  <g transform="translate(120, 210)">
+    <circle cx="60" cy="60" r="60" fill="url(#leaf)"/>
+    <g transform="translate(20, 20) scale(2.5)" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.96c1.4 3.32 1.4 8.14-2.2 12.14C14 18 11.5 20 10 22"/>
+      <path d="M2 21c0-3 1.85-5.36 5.08-6"/>
+    </g>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="270" y="270" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="128" font-weight="800" fill="#1a3d0a" letter-spacing="-4">
+    Herbyte
+  </text>
+  <text x="270" y="330" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="36" font-weight="500" fill="#4A7C2E" letter-spacing="-0.5">
+    Learn herbs. Safely.
+  </text>
+
+  <!-- Tagline block -->
+  <g transform="translate(120, 420)">
+    <rect x="0" y="0" width="960" height="140" rx="20" fill="#ffffff" opacity="0.65"/>
+    <text x="30" y="55" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="30" font-weight="600" fill="#2D5016">
+      A community-built herbal-medicine reference
+    </text>
+    <text x="30" y="100" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="22" fill="#4b5563">
+      Herbs and remedies with evidence ratings, drug-interaction checks,
+    </text>
+    <text x="30" y="128" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-size="22" fill="#4b5563">
+      workshops, and a marketplace of trusted sellers.
+    </text>
+  </g>
+</svg>

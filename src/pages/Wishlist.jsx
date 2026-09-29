@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Heart, Leaf, Beaker, Package, Trash2, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function WishlistPage() {
+  usePageMeta({ title: "Wishlist" });
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();

@@ -7,11 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Filter, Sparkles, X } from "lucide-react";
 import HerbCard from "../components/herbs/HerbCard";
 import AISearchSuggestions from "../components/herbs/AISearchSuggestions";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 const REGIONS = ["All", "Africa", "Asia", "Europe", "North America", "South America", "Australia", "Middle East", "Global"];
 const CATEGORIES = ["All", "Adaptogen", "Anti-inflammatory", "Digestive", "Immune Support", "Cardiovascular", "Respiratory", "Nervous System", "Antimicrobial", "Pain Relief", "Skin Health", "Other"];
 
 export default function ExploreHerbs() {
+  usePageMeta({ title: "Explore Herbs" });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("All");
   const [selectedCategory, setSelectedCategory] = useState("All");

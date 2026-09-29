@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Shield, Users, Sparkles, Search, BookOpen, CheckCircle, Beaker, Leaf, ShoppingBag, Store } from "lucide-react";
 import RemedyCard from "../components/remedies/RemedyCard";
 import TestimonialCard from "../components/home/TestimonialCard";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function Home() {
+  usePageMeta();
   const { data: featuredRemedies, isLoading } = useQuery({
     queryKey: ['featured-remedies'],
     queryFn: () => api.entities.Remedy.filter({ featured: true, approved_by_ai: true }, '-created_date', 6),

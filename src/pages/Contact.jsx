@@ -7,8 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, MapPin, Phone, Send, CheckCircle, Loader2 } from "lucide-react";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function Contact() {
+  usePageMeta({ title: "Contact" });
   const [formData, setFormData] = useState({
     name: "",
     email: "",

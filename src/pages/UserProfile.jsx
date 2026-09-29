@@ -6,15 +6,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { 
-  User, MessageCircle, Leaf, Beaker, Package, Shield, 
+import {
+  User, MessageCircle, Leaf, Beaker, Package, Shield,
   Calendar, Mail, ExternalLink, Store, Edit, Trash2, Heart, TrendingUp
 } from "lucide-react";
+import { usePageMeta } from "@/lib/usePageMeta";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { format } from "date-fns";
 
 export default function UserProfile() {
+  usePageMeta({ title: "Your Profile" });
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();

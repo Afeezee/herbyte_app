@@ -18,6 +18,7 @@ import CommentSection from "../components/shared/CommentSection";
 import WishlistButton from "../components/shared/WishlistButton";
 import ShareButtons from "../components/shared/ShareButtons";
 import EditRemedyModal from "../components/shared/EditRemedyModal";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function RemedyProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -47,6 +48,12 @@ export default function RemedyProfile() {
       return remedies[0];
     },
     enabled: !!remedyId,
+  });
+
+  usePageMeta({
+    title: remedy?.name,
+    description: remedy?.description,
+    image: remedy?.image_url,
   });
 
   const { data: products, isLoading: productsLoading } = useQuery({

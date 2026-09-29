@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { usePageMeta } from "@/lib/usePageMeta";
 import CommentSection from "../components/shared/CommentSection";
 import WishlistButton from "../components/shared/WishlistButton";
 import ShareButtons from "../components/shared/ShareButtons";
@@ -40,6 +41,12 @@ export default function ProductProfile() {
       return products[0];
     },
     enabled: !!productId,
+  });
+
+  usePageMeta({
+    title: product?.product_name,
+    description: product?.description,
+    image: product?.image_urls?.[0],
   });
 
   const { data: seller, isLoading: sellerLoading } = useQuery({

@@ -7,11 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Filter, Sparkles, X } from "lucide-react";
 import RemedyCard from "../components/remedies/RemedyCard";
 import AISearchSuggestions from "../components/herbs/AISearchSuggestions";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 const CATEGORIES = ["All", "Adaptogen", "Anti-inflammatory", "Digestive", "Immune Support", "Cardiovascular", "Respiratory", "Nervous System", "Antimicrobial", "Pain Relief", "Skin Health", "Other"];
 const REGIONS = ["All", "Africa", "Asia", "Europe", "North America", "South America", "Australia", "Middle East", "Global"];
 
 export default function ExploreRemedies() {
+  usePageMeta({ title: "Explore Remedies" });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedRegion, setSelectedRegion] = useState("All");

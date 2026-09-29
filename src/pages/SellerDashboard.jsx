@@ -10,12 +10,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Store, Package, Plus, Edit, Trash2, AlertCircle, 
-  CheckCircle, Clock, Upload, X 
+import {
+  Store, Package, Plus, Edit, Trash2, AlertCircle,
+  CheckCircle, Clock, Upload, X
 } from "lucide-react";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function SellerDashboard() {
+  usePageMeta({ title: "Seller Dashboard" });
   const queryClient = useQueryClient();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);

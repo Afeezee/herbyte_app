@@ -8,8 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar, Upload, X, CheckCircle, Info } from "lucide-react";
+import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function OrganizeEvent() {
+  usePageMeta({ title: "Organize an Event" });
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
