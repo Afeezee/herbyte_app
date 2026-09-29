@@ -9,9 +9,9 @@
  *   PATCH  /api/entities/:name/:id    (body = partial fields)
  *   DELETE /api/entities/:name/:id
  *
- * Response shape is Base44-compatible: list → array, get/create/update →
- * object, delete → {ok: true}. Fields that don't exist in schema are
- * dropped silently (defence in depth on top of writable_fields).
+ * Response shape: list → array, get/create/update → object, delete →
+ * {ok: true}. Fields that don't exist in schema are dropped silently
+ * (defence in depth on top of writable_fields).
  */
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";

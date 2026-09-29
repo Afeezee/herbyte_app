@@ -4,9 +4,7 @@
  * Rate-limit-per-IP to stop the form being used as a mail relay. Every
  * message includes the submitter's headers-derived IP for triage.
  *
- * The compat client on the frontend calls this via
- * base44.integrations.Core.SendEmail(payload), which forwards the same
- * shape Base44 accepted.
+ * The frontend calls this via api.SendEmail(payload).
  */
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";

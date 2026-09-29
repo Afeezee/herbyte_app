@@ -1,7 +1,7 @@
 /**
  * POST /api/upload — signed-in image upload to Vercel Blob.
  *
- * Frontend expects the Base44-compatible response shape { file_url: string }.
+ * Frontend expects the response shape { file_url: string }.
  * Restricts to a small MIME allow-list, caps at 5 MB, and gives every
  * upload a random suffix so filenames from the client aren't authoritative.
  */
@@ -79,6 +79,5 @@ uploadRoutes.post("/", async (c) => {
     addRandomSuffix: false, // We already randomised.
   });
 
-  // Base44 response shape.
   return c.json({ file_url: blob.url });
 });

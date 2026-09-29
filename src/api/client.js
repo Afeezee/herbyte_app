@@ -164,9 +164,9 @@ const submissions = {
 }
 
 // ---------------------------------------------------------------------------
-// Uploads + email — Base44 lived under `integrations.Core.*`; we keep
-// that path so the small number of remaining SDK-shaped calls in the app
-// still resolve.
+// Uploads + email — the legacy SDK exposed these under
+// `integrations.Core.*`; we keep that path so the small number of
+// remaining SDK-shaped calls in the app still resolve.
 // ---------------------------------------------------------------------------
 
 async function UploadFile({ file }) {

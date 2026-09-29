@@ -1,0 +1,17 @@
+{
+  "name": "Herbyte",
+  "short_name": "Herbyte",
+  "description": "Community-built herbal-medicine reference: herbs, remedies, marketplace, workshops.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2D5016",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

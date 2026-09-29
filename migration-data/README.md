@@ -1,6 +1,6 @@
 # migration-data/
 
-Place Base44 exports here before running `npm run import:data`.
+Place the legacy exports (one JSON file per entity) here before running `npm run import:data`.
 
 Expected files (one per entity):
 

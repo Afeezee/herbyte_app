@@ -11,7 +11,7 @@ import { uploadRoutes } from "./routes/upload";
 import { contactRoutes } from "./routes/contact";
 
 // -----------------------------------------------------------------------------
-// Shape mirrors what the Base44 SDK exposed: JSON responses, {error:{code,message}}
+// Response shape stays JSON with {error:{code,message}} on failure —
 // on failure. Handlers throw HTTPException; a global error handler maps them.
 // -----------------------------------------------------------------------------
 

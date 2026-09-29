@@ -14,7 +14,7 @@ import {
 import { sql } from "drizzle-orm";
 
 // -----------------------------------------------------------------------------
-// Enums — mirror the Base44 .jsonc enums exactly
+// Enums — mirror the legacy JSONC enums exactly
 // -----------------------------------------------------------------------------
 
 export const regionEnum = pgEnum("region", [
@@ -127,8 +127,8 @@ export const riskLevelEnum = pgEnum("risk_level", [
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
 // -----------------------------------------------------------------------------
-// Shared columns (id, timestamps, created_by) — Base44-compatible shape so the
-// UI keeps working without changes.
+// Shared columns (id, timestamps, created_by) — kept in the shape the UI
+// already reads.
 // -----------------------------------------------------------------------------
 
 const id = () =>
@@ -348,7 +348,7 @@ export const events = pgTable(
     title: text("title").notNull(),
     description: text("description").notNull(),
     event_type: eventTypeEnum("event_type").notNull(),
-    date: text("date").notNull(), // stored as YYYY-MM-DD to mirror Base44
+    date: text("date").notNull(), // stored as YYYY-MM-DD to mirror the legacy schema
     start_time: text("start_time").notNull(),
     end_time: text("end_time"),
     location_type: eventLocationTypeEnum("location_type").notNull(),
@@ -502,7 +502,7 @@ export const remedySubmissions = pgTable(
 // -----------------------------------------------------------------------------
 // HerbSubmission — new table parallel to RemedySubmission. The current app
 // runs its herb-submission form through InvokeLLM the same way, so we mirror
-// the pipeline on our side even though Base44 had no HerbSubmission entity.
+// the pipeline on our side even though the legacy schema had no HerbSubmission entity.
 // -----------------------------------------------------------------------------
 
 export const herbSubmissions = pgTable(

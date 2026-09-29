@@ -13,7 +13,6 @@ export default [
       'dist',
       '.vercel',
       'drizzle',
-      'base44',
       'node_modules',
       'migration-data',
       'api/**',

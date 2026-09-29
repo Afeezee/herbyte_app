@@ -1,19 +1,29 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Deploy Herbyte to Vercel. Assumes the Vercel CLI is installed and
+# authenticated (`vercel login`), and the project is linked (`vercel
+# link`).
+#
+# Usage:
+#   ./deploy_template.sh                # preview deploy
+#   ./deploy_template.sh --prod         # production deploy
 
-# Ensure the SDK is built before deployment
-echo "Building SDK..."
-cd sdk
-npm install --legacy-peer-deps
+set -euo pipefail
+
+echo "==> Type-checking"
+npx tsc --noEmit
+
+echo "==> Linting"
+npm run lint
+
+echo "==> Building the SPA"
 npm run build
-cd ..
 
-# Commit and push changes
-echo "Committing and pushing changes..."
-git add .
-git commit -m "deploy"
-git push origin main
+if [[ "${1:-}" == "--prod" ]]; then
+  echo "==> Deploying to production"
+  vercel deploy --prod --yes
+else
+  echo "==> Deploying preview"
+  vercel deploy --yes
+fi
 
-# Build and deploy the e2b template
-echo "Building and deploying e2b template..."
-cd e2b_template && e2b template build -c "npm run dev"
+echo "Done."

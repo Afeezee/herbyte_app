@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
+import { api } from "@/api/client";
 import { createPageUrl } from "@/utils";
 import { Leaf, Search, BookOpen, Send, Info, Mail, Menu, MessageCircle, Beaker, Store, User, Heart, Calendar, Shield } from "lucide-react";
 import {
@@ -91,7 +92,6 @@ export default function Layout({ children, currentPageName }) {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const { api } = await import("@/api/client");
         const currentUser = await api.auth.me();
         setUser(currentUser);
       } catch {

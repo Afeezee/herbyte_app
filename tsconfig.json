@@ -25,5 +25,5 @@
     }
   },
   "include": ["api", "server", "scripts", "drizzle.config.ts", "src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", ".vercel", "base44"]
+  "exclude": ["node_modules", "dist", ".vercel"]
 }

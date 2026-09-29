@@ -1,3 +1,6 @@
+// Route table consumed by App.jsx. Keys become URL paths via
+// `createPageUrl` in `src/utils/index.ts` (lower-case, spaces → hyphens).
+// Add a new page by importing it here and adding it to PAGES.
 import Home from './pages/Home';
 import ExploreHerbs from './pages/ExploreHerbs';
 import HerbProfile from './pages/HerbProfile';

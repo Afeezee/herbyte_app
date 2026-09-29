@@ -16,7 +16,7 @@ export const authRoutes = new Hono<{ Variables: Variables }>();
  */
 authRoutes.get("/me", (c) => {
   const u = c.get("user");
-  return c.json(toBase44Shape(u));
+  return c.json(toLegacyShape(u));
 });
 
 /**
@@ -84,15 +84,15 @@ authRoutes.patch("/me", async (c) => {
   if (!updated) {
     throw new HTTPException(500, { message: "update failed" });
   }
-  return c.json(toBase44Shape(updated));
+  return c.json(toLegacyShape(updated));
 });
 
 /**
- * Emit a Base44-compatible user shape so the existing frontend keeps
- * reading `user.role`, `user.email`, `user.full_name`, `user.seller_profile_id`
+ * Emit a stable user shape so the existing frontend keeps reading
+ * `user.role`, `user.email`, `user.full_name`, `user.seller_profile_id`
  * unchanged.
  */
-function toBase44Shape(u: typeof users.$inferSelect | ReturnType<Context<{ Variables: Variables }>["get"]>) {
+function toLegacyShape(u: typeof users.$inferSelect | ReturnType<Context<{ Variables: Variables }>["get"]>) {
   return {
     id: u.id,
     email: u.email,
@@ -100,7 +100,6 @@ function toBase44Shape(u: typeof users.$inferSelect | ReturnType<Context<{ Varia
     role: u.role,
     is_seller: u.is_seller,
     seller_profile_id: u.seller_profile_id,
-    // Base44 exposed created_date/updated_date on the user record too.
     created_date: "created_date" in u ? u.created_date : undefined,
     updated_date: "updated_date" in u ? u.updated_date : undefined,
   };

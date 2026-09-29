@@ -29,7 +29,6 @@ dist-ssr
 
 .env
 !.env.example
-base44/.app.jsonc
 
 # Vercel
 .vercel
@@ -37,6 +36,6 @@ base44/.app.jsonc
 # Drizzle
 drizzle/meta/
 
-# Migration data — imported from Base44 exports; keep out of git
+# Migration data — imported from the legacy exports; keep out of git
 migration-data/*.json
 !migration-data/README.md

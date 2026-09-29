@@ -1,6 +1,6 @@
 /**
  * Web-search grounding — Serper primary, Tavily fallback. Fills the gap
- * Base44's `add_context_from_internet` used to provide: real URLs to hand
+ * the legacy `add_context_from_internet` flag used to provide: real URLs to hand
  * the model, then filtered server-side against the returned reference list
  * so we never trust a hallucinated citation.
  *
