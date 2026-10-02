@@ -92,6 +92,43 @@ export default function AdminDashboard() {
     enabled: user?.role === 'admin',
   });
 
+  // Submissions awaiting admin publish (herb + remedy)
+  const { data: herbSubmissions = [] } = useQuery({
+    queryKey: ['admin-herb-submissions'],
+    queryFn: () => api.entities.HerbSubmission.list('-created_date'),
+    enabled: user?.role === 'admin',
+  });
+  const { data: remedySubmissions = [] } = useQuery({
+    queryKey: ['admin-remedy-submissions'],
+    queryFn: () => api.entities.RemedySubmission.list('-created_date'),
+    enabled: user?.role === 'admin',
+  });
+
+  const publishHerbMutation = useMutation({
+    mutationFn: (id) => api.submissions.publishHerb(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-herb-submissions'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-herbs'] });
+    },
+    onError: (err) => alert(`Publish failed: ${err?.message ?? 'unknown error'}`),
+  });
+  const publishRemedyMutation = useMutation({
+    mutationFn: (id) => api.submissions.publishRemedy(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-remedy-submissions'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-remedies'] });
+    },
+    onError: (err) => alert(`Publish failed: ${err?.message ?? 'unknown error'}`),
+  });
+  const rejectHerbSubmissionMutation = useMutation({
+    mutationFn: (id) => api.entities.HerbSubmission.update(id, { moderation_status: 'Rejected' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-herb-submissions'] }),
+  });
+  const rejectRemedySubmissionMutation = useMutation({
+    mutationFn: (id) => api.entities.RemedySubmission.update(id, { moderation_status: 'Rejected' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-remedy-submissions'] }),
+  });
+
   // Delete mutations
   const deleteHerbMutation = useMutation({
     mutationFn: (id) => api.entities.Herb.delete(id),
@@ -366,8 +403,18 @@ export default function AdminDashboard() {
         </div>
 
         {/* Management Tabs */}
-        <Tabs defaultValue="herbs" className="space-y-6">
-          <TabsList className="grid grid-cols-3 md:grid-cols-7 bg-white border">
+        <Tabs defaultValue="submissions" className="space-y-6">
+          <TabsList className="grid grid-cols-4 md:grid-cols-8 bg-white border">
+            <TabsTrigger value="submissions">
+              Submissions
+              {(herbSubmissions.filter(s => s.moderation_status !== 'Rejected' && !s.published_herb_id).length +
+                remedySubmissions.filter(s => s.moderation_status !== 'Rejected' && !s.published_remedy_id).length) > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-amber-500 text-white text-xs rounded-full">
+                  {herbSubmissions.filter(s => s.moderation_status !== 'Rejected' && !s.published_herb_id).length +
+                   remedySubmissions.filter(s => s.moderation_status !== 'Rejected' && !s.published_remedy_id).length}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="herbs">Herbs</TabsTrigger>
             <TabsTrigger value="remedies">Remedies</TabsTrigger>
             <TabsTrigger value="products">Products</TabsTrigger>
@@ -376,6 +423,20 @@ export default function AdminDashboard() {
             <TabsTrigger value="sellers">Sellers</TabsTrigger>
             <TabsTrigger value="comments">Comments</TabsTrigger>
           </TabsList>
+
+          {/* Submissions Tab */}
+          <TabsContent value="submissions">
+            <SubmissionsPanel
+              herbSubmissions={herbSubmissions}
+              remedySubmissions={remedySubmissions}
+              onPublishHerb={(id) => publishHerbMutation.mutate(id)}
+              onPublishRemedy={(id) => publishRemedyMutation.mutate(id)}
+              onRejectHerb={(id) => rejectHerbSubmissionMutation.mutate(id)}
+              onRejectRemedy={(id) => rejectRemedySubmissionMutation.mutate(id)}
+              publishingHerbId={publishHerbMutation.isPending ? publishHerbMutation.variables : null}
+              publishingRemedyId={publishRemedyMutation.isPending ? publishRemedyMutation.variables : null}
+            />
+          </TabsContent>
 
           {/* Herbs Tab */}
           <TabsContent value="herbs">
@@ -782,6 +843,237 @@ export default function AdminDashboard() {
           </TabsContent>
         </Tabs>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SubmissionsPanel — reviews pending herb/remedy submissions, shows the
+// AI's enrichment draft, and lets an admin Publish (creates the real
+// herbs/remedies row via POST /api/submissions/{herb,remedy}/:id/publish)
+// or Reject (marks the submission moderation_status so it stays out of
+// the queue).
+// ---------------------------------------------------------------------------
+
+function SubmissionsPanel({
+  herbSubmissions,
+  remedySubmissions,
+  onPublishHerb,
+  onPublishRemedy,
+  onRejectHerb,
+  onRejectRemedy,
+  publishingHerbId,
+  publishingRemedyId,
+}) {
+  const pendingHerbs = herbSubmissions.filter(s => !s.published_herb_id && s.moderation_status !== 'Rejected');
+  const pendingRemedies = remedySubmissions.filter(s => !s.published_remedy_id && s.moderation_status !== 'Rejected');
+
+  return (
+    <div className="space-y-6">
+      <Alert className="bg-amber-50 border-amber-200">
+        <AlertTriangle className="w-4 h-4 text-amber-700" />
+        <AlertDescription className="text-amber-900">
+          <strong>Human-in-the-loop publishing.</strong> AI moderation runs on
+          every submission but no entry becomes public until an admin clicks
+          Publish here. Review the AI's draft, open the submitter's note and
+          the AI feedback, then approve or reject.
+        </AlertDescription>
+      </Alert>
+
+      <Tabs defaultValue="remedies-sub">
+        <TabsList className="bg-white border">
+          <TabsTrigger value="remedies-sub">Remedies ({pendingRemedies.length})</TabsTrigger>
+          <TabsTrigger value="herbs-sub">Herbs ({pendingHerbs.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="remedies-sub">
+          <Card>
+            <CardContent className="p-6">
+              {pendingRemedies.length === 0 ? (
+                <p className="text-gray-500 text-center py-10">No remedy submissions awaiting review.</p>
+              ) : (
+                <div className="space-y-4">
+                  {pendingRemedies.map((s) => (
+                    <SubmissionRow
+                      key={s.id}
+                      sub={s}
+                      kind="remedy"
+                      onPublish={() => onPublishRemedy(s.id)}
+                      onReject={() => onRejectRemedy(s.id)}
+                      isPublishing={publishingRemedyId === s.id}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="herbs-sub">
+          <Card>
+            <CardContent className="p-6">
+              {pendingHerbs.length === 0 ? (
+                <p className="text-gray-500 text-center py-10">No herb submissions awaiting review.</p>
+              ) : (
+                <div className="space-y-4">
+                  {pendingHerbs.map((s) => (
+                    <SubmissionRow
+                      key={s.id}
+                      sub={s}
+                      kind="herb"
+                      onPublish={() => onPublishHerb(s.id)}
+                      onReject={() => onRejectHerb(s.id)}
+                      isPublishing={publishingHerbId === s.id}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function statusBadge(status) {
+  if (status === 'Approved') return 'bg-green-500';
+  if (status === 'Rejected') return 'bg-red-500';
+  if (status === 'Flagged - Risk Identified') return 'bg-orange-500';
+  return 'bg-yellow-500'; // Pending Review
+}
+
+function SubmissionRow({ sub, kind, onPublish, onReject, isPublishing }) {
+  const [expanded, setExpanded] = useState(false);
+  const draft = sub.draft_payload ?? null;
+  const title = kind === 'herb'
+    ? (draft?.common_name ?? sub.common_name ?? '(no name)')
+    : (draft?.name ?? sub.health_condition ?? '(no name)');
+  const canPublish = sub.ready_to_publish === true && !!draft;
+
+  return (
+    <div className="border rounded-lg p-4 bg-white">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex gap-4 flex-1 min-w-0">
+          {(draft?.image_url || sub.image_url) && (
+            <img
+              src={draft?.image_url ?? sub.image_url}
+              alt={title}
+              className="w-20 h-20 object-cover rounded"
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <h4 className="font-semibold text-[#2D5016] truncate">{title}</h4>
+              <Badge className={`${statusBadge(sub.moderation_status)} text-white text-xs`}>
+                {sub.moderation_status}
+              </Badge>
+              {sub.risk_level && (
+                <Badge variant="outline" className="text-xs">risk: {sub.risk_level}</Badge>
+              )}
+              {sub.expert_review_required && (
+                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-900 border-amber-300">
+                  expert review
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mb-1">
+              Submitter: {sub.submitter_name || sub.created_by} ·
+              {' '}{sub.created_date ? format(new Date(sub.created_date), 'd MMM yyyy, HH:mm') : ''}
+            </p>
+            {sub.ai_feedback && (
+              <p className="text-sm text-gray-700 line-clamp-2">
+                <span className="font-medium">AI:</span> {sub.ai_feedback}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 shrink-0">
+          <Button
+            size="sm"
+            disabled={!canPublish || isPublishing}
+            className="bg-[#4A7C2E] hover:bg-[#2D5016] text-white"
+            onClick={onPublish}
+            title={canPublish ? '' : 'AI did not approve — review the draft before publishing'}
+          >
+            {isPublishing ? '…' : 'Publish'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setExpanded(e => !e)}>
+            {expanded ? 'Hide draft' : 'View draft'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-red-700 hover:bg-red-50"
+            onClick={onReject}
+          >
+            Reject
+          </Button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-4 pt-4 border-t text-sm space-y-2">
+          {draft ? (
+            <>
+              {kind === 'herb' ? (
+                <>
+                  <KV label="Botanical name" value={draft.botanical_name} />
+                  <KV label="Region" value={draft.region} />
+                  <KV label="Category" value={draft.category} />
+                  <KV label="Safety rating" value={draft.safety_rating} />
+                  <KV label="Description" value={draft.description} />
+                  <KV label="Dosage" value={draft.dosage} />
+                  <KVList label="Drug interactions" items={draft.drug_interactions} />
+                  <KVList label="Contraindications" value={draft.contraindications} items={draft.contraindications} />
+                  <KVList label="Side effects" items={draft.side_effects} />
+                  <KVList label="References" items={draft.research_references?.map(r => `${r.title} — ${r.url}`) ?? []} />
+                </>
+              ) : (
+                <>
+                  <KV label="Primary herb" value={draft.primary_herb_name} />
+                  <KV label="Health condition" value={draft.health_condition} />
+                  <KV label="Region" value={draft.region} />
+                  <KV label="Category" value={draft.category} />
+                  <KV label="Safety rating" value={draft.safety_rating} />
+                  <KV label="Preparation" value={draft.preparation_method} />
+                  <KV label="Dosage" value={draft.dosage} />
+                  <KV label="Duration" value={draft.duration_of_use} />
+                  <KV label="Description" value={draft.description} />
+                  <KVList label="Drug interactions" items={draft.drug_interactions} />
+                  <KVList label="Contraindications" items={draft.contraindications} />
+                  <KVList label="Side effects" items={draft.side_effects} />
+                  <KVList label="References" items={draft.research_references?.map(r => `${r.title} — ${r.url}`) ?? []} />
+                </>
+              )}
+            </>
+          ) : (
+            <p className="text-gray-500">
+              No AI draft on this submission — it was deferred (budget exhausted or AI failure).
+              You can still Reject it or re-trigger via re-submission.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KV({ label, value }) {
+  if (value === undefined || value === null || value === '') return null;
+  return (
+    <div><span className="font-medium text-gray-700">{label}:</span> <span className="text-gray-800">{String(value)}</span></div>
+  );
+}
+
+function KVList({ label, items }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div>
+      <div className="font-medium text-gray-700">{label}:</div>
+      <ul className="list-disc pl-5 text-gray-800">
+        {items.map((it, i) => <li key={i}>{it}</li>)}
+      </ul>
     </div>
   );
 }
