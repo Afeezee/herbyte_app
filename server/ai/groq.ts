@@ -170,22 +170,29 @@ export async function chatJson<T>({
             return { json: parsed, raw: attempt.raw, model, usage: attempt.usage };
           } catch (parseErr) {
             if (tries === 1) {
+              const detail = parseErr instanceof Error ? parseErr.message : String(parseErr);
+              // Snippet of raw output helps diagnose in moderation_events.
+              const snippet = attempt.raw.slice(0, 400).replace(/\s+/g, " ");
+              console.error(
+                `[groq] parse failed on model=${model} after repair.\n  err: ${detail}\n  raw: ${snippet}`,
+              );
               lastErr = new GroqError(
                 "invalid_json",
-                `Model output did not match expected schema on model ${model}: ${
-                  parseErr instanceof Error ? parseErr.message : String(parseErr)
-                }`,
+                `Model output did not match schema on ${model}: ${detail}`,
               );
               break;
             }
-            // One repair retry with a targeted nudge.
+            // One repair retry — tell the model EXACTLY what went wrong.
+            const detail = parseErr instanceof Error ? parseErr.message : String(parseErr);
             const repairMessages: ChatMessage[] = [
               ...messages,
               { role: "assistant", content: attempt.raw },
               {
                 role: "user",
                 content:
-                  "Your previous reply did not parse as valid JSON matching the schema. Reply again with ONLY the JSON object — no prose, no <think>, no code fences. Same fields, same shape.",
+                  `Your previous reply did not parse against the schema. Error: ${detail}\n\n` +
+                  `Reply again with ONLY the JSON object — no prose, no <think>, no code fences — ` +
+                  `and ensure every required field is present and every enum uses an allowed value.`,
               },
             ];
             attempt = await callOnce({

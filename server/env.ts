@@ -39,10 +39,13 @@ const schema = z.object({
   CLERK_SECRET_KEY: optionalTrimmed,
   CLERK_WEBHOOK_SECRET: optionalTrimmed,
 
-  // Groq
+  // Groq — OpenAI OSS family. 20b is the fast primary with reliable
+  // JSON-mode output; 120b is the heavier fallback for when the small
+  // one 4xx/5xx's or returns parse-failing JSON. llama-3.3-70b and the
+  // qwen Preview models are no longer available / decommissioned.
   GROQ_API_KEY: optionalTrimmed,
-  AI_MODEL: z.string().default("qwen/qwen3.8-27b"),
-  AI_FALLBACK_MODEL: optionalTrimmed,
+  AI_MODEL: z.string().default("openai/gpt-oss-20b"),
+  AI_FALLBACK_MODEL: z.string().default("openai/gpt-oss-120b"),
   GROQ_RPM_CEILING: positiveInt(25),
   GROQ_TPM_CEILING: positiveInt(7000),
   GROQ_TPD_CEILING: positiveInt(180000),

@@ -69,35 +69,39 @@ export const remedySubmissionInputSchema = z.object({
 });
 
 export const remedyModerationOutputSchema = z.object({
+  // Keep moderation_status strict — it gates auto-publish, so drift
+  // here should become a Pending Review rather than a silent "Approved".
   moderation_status: z.enum([
     "Pending Review",
     "Approved",
     "Flagged - Risk Identified",
     "Rejected",
-  ]),
-  ai_feedback: z.string(),
-  risk_level: z.enum(["Low", "Moderate", "High", "Critical"]),
-  expert_review_required: z.boolean(),
+  ]).catch("Pending Review"),
+  ai_feedback: z.string().catch("(no feedback)"),
+  risk_level: z.enum(["Low", "Moderate", "High", "Critical"]).catch("Moderate"),
+  expert_review_required: z.boolean().catch(false),
   // Enriched draft — used when the admin later publishes it as a real Remedy.
+  // Enums fall back to safe defaults so a single off-vocab value doesn't
+  // fail the whole response.
   draft: z.object({
     name: z.string(),
-    description: z.string(),
-    primary_herb_name: z.string(),
-    herbs_used: z.array(z.string()).default([]),
-    health_condition: z.string(),
-    conditions_treated: z.array(z.string()).default([]),
-    preparation_method: z.string(),
-    dosage: z.string().optional().default(""),
-    duration_of_use: z.string().optional().default(""),
-    observed_effects: z.string().optional().default(""),
-    risk_warnings: z.array(z.string()).default([]),
-    drug_interactions: z.array(z.string()).default([]),
-    contraindications: z.array(z.string()).default([]),
-    side_effects: z.array(z.string()).default([]),
-    safety_rating: z.enum(safetyRatings),
-    category: z.enum(categories),
-    region: z.enum(regions),
-    research_references: z.array(referenceSchema).default([]),
+    description: z.string().catch(""),
+    primary_herb_name: z.string().catch(""),
+    herbs_used: z.array(z.string()).catch([]),
+    health_condition: z.string().catch(""),
+    conditions_treated: z.array(z.string()).catch([]),
+    preparation_method: z.string().catch(""),
+    dosage: z.string().catch(""),
+    duration_of_use: z.string().catch(""),
+    observed_effects: z.string().catch(""),
+    risk_warnings: z.array(z.string()).catch([]),
+    drug_interactions: z.array(z.string()).catch([]),
+    contraindications: z.array(z.string()).catch([]),
+    side_effects: z.array(z.string()).catch([]),
+    safety_rating: z.enum(safetyRatings).catch("Use with Caution"),
+    category: z.enum(categories).catch("Other"),
+    region: z.enum(regions).catch("Global"),
+    research_references: z.array(referenceSchema).catch([]),
   }),
 });
 
@@ -155,17 +159,17 @@ export const herbModerationOutputSchema = z.object({
     "Approved",
     "Flagged - Risk Identified",
     "Rejected",
-  ]),
-  ai_feedback: z.string(),
-  risk_level: z.enum(["Low", "Moderate", "High", "Critical"]),
-  expert_review_required: z.boolean(),
+  ]).catch("Pending Review"),
+  ai_feedback: z.string().catch("(no feedback)"),
+  risk_level: z.enum(["Low", "Moderate", "High", "Critical"]).catch("Moderate"),
+  expert_review_required: z.boolean().catch(false),
   draft: z.object({
     common_name: z.string(),
-    botanical_name: z.string(),
-    local_names: z.array(z.string()).default([]),
-    description: z.string(),
-    region: z.enum(regions),
-    category: z.enum(categories),
+    botanical_name: z.string().catch(""),
+    local_names: z.array(z.string()).catch([]),
+    description: z.string().catch(""),
+    region: z.enum(regions).catch("Global"),
+    category: z.enum(categories).catch("Other"),
     health_benefits: z
       .array(
         z.object({
@@ -178,21 +182,21 @@ export const herbModerationOutputSchema = z.object({
               "Traditional Use",
               "Anecdotal",
             ])
-            .default("Traditional Use"),
+            .catch("Traditional Use"),
         }),
       )
-      .default([]),
-    conditions_treated: z.array(z.string()).default([]),
+      .catch([]),
+    conditions_treated: z.array(z.string()).catch([]),
     preparation_methods: z
       .array(z.object({ method: z.string(), instructions: z.string() }))
-      .default([]),
-    dosage: z.string().optional().default(""),
-    drug_interactions: z.array(z.string()).default([]),
-    contraindications: z.array(z.string()).default([]),
-    side_effects: z.array(z.string()).default([]),
-    major_compounds: z.array(z.string()).default([]),
-    research_references: z.array(referenceSchema).default([]),
-    safety_rating: z.enum(safetyRatings),
+      .catch([]),
+    dosage: z.string().catch(""),
+    drug_interactions: z.array(z.string()).catch([]),
+    contraindications: z.array(z.string()).catch([]),
+    side_effects: z.array(z.string()).catch([]),
+    major_compounds: z.array(z.string()).catch([]),
+    research_references: z.array(referenceSchema).catch([]),
+    safety_rating: z.enum(safetyRatings).catch("Use with Caution"),
   }),
 });
 
