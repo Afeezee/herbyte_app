@@ -134,15 +134,48 @@ async function publishHerbFromSubmission(
 }
 
 /**
- * Auto-publish eligibility: AI returned "Approved" AND risk is bounded.
- * Flipping AUTO_PUBLISH_APPROVED=false reverts to the "every submission
- * waits for admin" behaviour.
+ * Auto-publish eligibility: the real signal of trust is verified web
+ * references — the Serper filter in server/ai/search.ts already dropped
+ * any URL the model invented, so if research_references survived with
+ * length ≥ 1, we have real citations backing the entry. We publish
+ * regardless of risk_level, as long as the AI didn't explicitly Reject.
+ *
+ * Flipping AUTO_PUBLISH_APPROVED=false reverts to the pre-automation
+ * behaviour where everything waits for admin review.
  */
-function autoPublishEligible(moderationStatus: string | null | undefined, risk: string | null | undefined): boolean {
+function autoPublishEligible(
+  moderationStatus: string | null | undefined,
+  refs: Array<{ url?: string }> | null | undefined,
+): boolean {
   if (!getEnv().AUTO_PUBLISH_APPROVED) return false;
-  if (moderationStatus !== "Approved") return false;
-  if (risk !== "Low" && risk !== "Moderate") return false;
-  return true;
+  if (moderationStatus === "Rejected") return false;
+  const n = Array.isArray(refs) ? refs.length : 0;
+  return n > 0;
+}
+
+/**
+ * Force-reject when there is nothing to back the entry (zero verifiable
+ * references survived the Serper filter). Mutates the verdict in place
+ * so downstream insert + logging record the real outcome. The row still
+ * gets written (audit trail) but moderation_status=Rejected keeps it
+ * out of the admin queue AND out of the daily cap counter.
+ */
+function markRejectedIfNoEvidence<
+  V extends {
+    moderation_status: string;
+    ai_feedback: string;
+    draft: { research_references: Array<{ url?: string }> };
+  },
+>(verdict: V): V {
+  const n = verdict.draft.research_references?.length ?? 0;
+  if (verdict.moderation_status === "Rejected") return verdict;
+  if (n > 0) return verdict;
+  verdict.moderation_status = "Rejected";
+  const prev = verdict.ai_feedback ? verdict.ai_feedback + " " : "";
+  verdict.ai_feedback =
+    prev +
+    "[auto-reject: no web citations survived verification — refusing to publish without evidence]";
+  return verdict;
 }
 
 // ---------------------------------------------------------------------------
@@ -276,6 +309,8 @@ submissionRoutes.post("/remedy", async (c) => {
     if (!verdict.draft.name) verdict.draft.name = input.name;
     if (!verdict.draft.health_condition) verdict.draft.health_condition = input.health_condition;
     if (!verdict.draft.preparation_method) verdict.draft.preparation_method = input.preparation_method;
+    // Evidence gate: no verified citations → auto-reject.
+    markRejectedIfNoEvidence(verdict);
   } catch (err) {
     errorCode =
       err instanceof GroqError ? err.code : err instanceof z.ZodError ? "invalid_json" : "internal";
@@ -312,15 +347,15 @@ submissionRoutes.post("/remedy", async (c) => {
     })
     .returning()) as unknown as Array<{ id: string }>;
 
-  // Auto-publish branch: skip the admin wait when the AI is confident
-  // and risk is bounded. `?draft=1` opts THIS submission out of
-  // auto-publish regardless of the AI verdict so the admin can review.
+  // Auto-publish branch: skip the admin wait when the AI didn't Reject
+  // and at least one verified citation survived. `?draft=1` opts THIS
+  // submission out regardless so the admin can review.
   let publishedId: string | null = null;
   if (
     !isDraft &&
     saved?.id &&
     verdict &&
-    autoPublishEligible(verdict.moderation_status, verdict.risk_level)
+    autoPublishEligible(verdict.moderation_status, verdict.draft.research_references)
   ) {
     try {
       // Re-fetch the row we just wrote so publish helper gets the full shape.
@@ -479,6 +514,7 @@ submissionRoutes.post("/herb", async (c) => {
     if (!verdict.draft.botanical_name && input.botanical_name) {
       verdict.draft.botanical_name = input.botanical_name;
     }
+    markRejectedIfNoEvidence(verdict);
   } catch (err) {
     errorCode =
       err instanceof GroqError ? err.code : err instanceof z.ZodError ? "invalid_json" : "internal";
@@ -517,7 +553,7 @@ submissionRoutes.post("/herb", async (c) => {
     !isDraft &&
     saved?.id &&
     verdict &&
-    autoPublishEligible(verdict.moderation_status, verdict.risk_level)
+    autoPublishEligible(verdict.moderation_status, verdict.draft.research_references)
   ) {
     try {
       const [subRow] = await db

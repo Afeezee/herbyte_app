@@ -110,12 +110,22 @@ async function main(): Promise<number> {
   console.log(`attempted:   ${report.attempted}`);
   console.log(`posted:      ${report.posted}`);
   for (const r of report.results) {
-    const mark = r.ok ? "✓" : "✗";
     const name = r.display_name ?? "(no draft)";
     const status = r.moderation_status ?? r.error ?? "";
-    const published = r.auto_published ? ` PUBLISHED(${r.published_id})` : "";
+    let outcome: string;
+    let mark: string;
+    if (r.auto_published) {
+      mark = "✓";
+      outcome = `${status} PUBLISHED(${r.published_id})`;
+    } else if (status === "Rejected") {
+      mark = "✗";
+      outcome = `Rejected (no evidence — not counted)`;
+    } else {
+      mark = r.ok ? "·" : "✗";
+      outcome = status;
+    }
     console.log(
-      `  ${mark} [${r.kind}] ${name}  (${r.category}/${r.region}, ${r.generation_method}) → ${status}${published}`,
+      `  ${mark} [${r.kind}] ${name}  (${r.category}/${r.region}, ${r.generation_method}) → ${outcome}`,
     );
   }
   return 0;

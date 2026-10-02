@@ -103,14 +103,14 @@ export type Plan = {
 
 /**
  * Pick a (kind, category, region) that is UNDER-represented.
- * 1. Alternate kind by DB-count parity so herbs and remedies grow together.
+ * 1. Weighted random on kind — default 60% remedy, 40% herb. Override
+ *    with the second arg (0..1 remedy probability).
  * 2. Pick the least-represented category for that kind.
  * 3. Pick the least-represented region for that kind within that category.
  * 4. Give West Africa a small nudge so the brief's region bias comes through.
  */
-export function chooseNextPlan(snapshot: DbSnapshot): Plan {
-  const kind: "herb" | "remedy" =
-    snapshot.herbs.length <= snapshot.remedies.length ? "herb" : "remedy";
+export function chooseNextPlan(snapshot: DbSnapshot, remedyRatio = 0.6): Plan {
+  const kind: "herb" | "remedy" = Math.random() < remedyRatio ? "remedy" : "herb";
   const items = kind === "herb" ? snapshot.herbs : snapshot.remedies;
 
   const categoryCounts = new Map<Category, number>();

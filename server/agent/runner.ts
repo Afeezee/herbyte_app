@@ -173,7 +173,10 @@ export async function runAgentBatch(n: number, opts: AgentRunOptions): Promise<A
     );
     for (const r of batch) {
       results.push(r as PerPostResult);
-      if (r.ok && !opts.dryRun) posted++;
+      // Only count genuinely-published entries. An auto-rejected
+      // submission (no verifiable citations) doesn't count toward the
+      // daily cap and doesn't inflate the "posted" tally.
+      if (!opts.dryRun && (r as PerPostResult).auto_published) posted++;
     }
     launched += size;
   }
