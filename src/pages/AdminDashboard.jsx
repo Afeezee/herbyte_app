@@ -873,10 +873,11 @@ function SubmissionsPanel({
       <Alert className="bg-amber-50 border-amber-200">
         <AlertTriangle className="w-4 h-4 text-amber-700" />
         <AlertDescription className="text-amber-900">
-          <strong>Human-in-the-loop publishing.</strong> AI moderation runs on
-          every submission but no entry becomes public until an admin clicks
-          Publish here. Review the AI's draft, open the submitter's note and
-          the AI feedback, then approve or reject.
+          <strong>Auto-publish is on.</strong> Submissions the AI returns as
+          "Approved" with Low or Moderate risk go live immediately — they
+          don't appear here. What's listed below are the submissions the AI
+          wasn't confident about (Pending Review, Flagged, or High/Critical
+          risk). Review the draft, then Publish anyway or Reject.
         </AlertDescription>
       </Alert>
 
@@ -949,7 +950,22 @@ function SubmissionRow({ sub, kind, onPublish, onReject, isPublishing }) {
   const title = kind === 'herb'
     ? (draft?.common_name ?? sub.common_name ?? '(no name)')
     : (draft?.name ?? sub.health_condition ?? '(no name)');
-  const canPublish = sub.ready_to_publish === true && !!draft;
+  // With AUTO_PUBLISH_APPROVED on, anything with ready_to_publish=true
+  // has already been published. What's left in the queue is
+  // Pending / Flagged / high-risk — publishable but needs an admin
+  // confirm.
+  const canPublish = !!draft;
+  const needsConfirm = sub.moderation_status !== 'Approved' || !sub.ready_to_publish;
+
+  const handlePublishClick = () => {
+    if (needsConfirm) {
+      const msg = sub.moderation_status === 'Flagged - Risk Identified'
+        ? `AI flagged this as a risk (${sub.risk_level ?? 'unknown risk level'}). Publish anyway?`
+        : `AI did not Approve this (status: ${sub.moderation_status}). Publish anyway?`;
+      if (!window.confirm(msg)) return;
+    }
+    onPublish();
+  };
 
   return (
     <div className="border rounded-lg p-4 bg-white">
@@ -992,11 +1008,17 @@ function SubmissionRow({ sub, kind, onPublish, onReject, isPublishing }) {
           <Button
             size="sm"
             disabled={!canPublish || isPublishing}
-            className="bg-[#4A7C2E] hover:bg-[#2D5016] text-white"
-            onClick={onPublish}
-            title={canPublish ? '' : 'AI did not approve — review the draft before publishing'}
+            className={needsConfirm
+              ? "bg-amber-600 hover:bg-amber-700 text-white"
+              : "bg-[#4A7C2E] hover:bg-[#2D5016] text-white"}
+            onClick={handlePublishClick}
+            title={!canPublish
+              ? 'No AI draft — nothing to publish'
+              : needsConfirm
+                ? 'AI did not Approve — confirmation required'
+                : ''}
           >
-            {isPublishing ? '…' : 'Publish'}
+            {isPublishing ? '…' : needsConfirm ? 'Publish anyway' : 'Publish'}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setExpanded(e => !e)}>
             {expanded ? 'Hide draft' : 'View draft'}

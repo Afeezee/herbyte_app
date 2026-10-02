@@ -76,6 +76,17 @@ const schema = z.object({
   // Unsplash — stock photos for agent-generated herb/remedy entries.
   UNSPLASH_ACCESS_KEY: optionalTrimmed,
 
+  // Auto-publish rule: when the submission moderation returns
+  // "Approved" and risk_level ∈ {Low, Moderate}, the submission
+  // routes publish the entry immediately — no admin click needed.
+  // Admin review is still required for Pending Review, Flagged, or
+  // High/Critical risk. Set to "false" to require admin publish on
+  // everything (the pre-automation behaviour).
+  AUTO_PUBLISH_APPROVED: z
+    .string()
+    .optional()
+    .transform((v) => v === undefined || v === "" ? true : v.toLowerCase() !== "false"),
+
   // Content agent limits (easy to override in Vercel / local env).
   AGENT_DAILY_CAP: positiveInt(12),
   AGENT_RESEARCH_RATIO: z

@@ -108,8 +108,9 @@ async function main(): Promise<number> {
     const mark = r.ok ? "✓" : "✗";
     const name = r.display_name ?? "(no draft)";
     const status = r.moderation_status ?? r.error ?? "";
+    const published = r.auto_published ? ` PUBLISHED(${r.published_id})` : "";
     console.log(
-      `  ${mark} [${r.kind}] ${name}  (${r.category}/${r.region}, ${r.generation_method}) → ${status}`,
+      `  ${mark} [${r.kind}] ${name}  (${r.category}/${r.region}, ${r.generation_method}) → ${status}${published}`,
     );
   }
   return 0;

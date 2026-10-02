@@ -53,7 +53,17 @@ export type SubmitFn = (
   path: "/api/submissions/herb" | "/api/submissions/remedy",
   body: Record<string, unknown>,
 ) => Promise<
-  | { ok: true; data: { id?: string; moderation_status?: string; ai_feedback?: string } }
+  | {
+      ok: true;
+      data: {
+        id?: string;
+        moderation_status?: string;
+        ai_feedback?: string;
+        auto_published?: boolean;
+        published_remedy_id?: string | null;
+        published_herb_id?: string | null;
+      };
+    }
   | { ok: false; status: number; message: string }
 >;
 
@@ -76,6 +86,8 @@ export type PerPostResult = {
   image_attribution?: string | null;
   moderation_status?: string;
   submission_id?: string;
+  published_id?: string | null;
+  auto_published?: boolean;
   error?: string;
 };
 
@@ -316,6 +328,9 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
     image_attribution: image?.attribution ?? null,
     moderation_status: res.data.moderation_status,
     submission_id: res.data.id,
+    auto_published: !!res.data.auto_published,
+    published_id:
+      res.data.published_remedy_id ?? res.data.published_herb_id ?? null,
   };
 }
 

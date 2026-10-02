@@ -40,6 +40,7 @@ import { reserveBudget, recordUsage } from "../ai/budget";
 import { chatJson, GroqError, estimateChatTokens } from "../ai/groq";
 import { logEvent } from "../ai/events";
 import { search, filterCitedReferences } from "../ai/search";
+import { getEnv } from "../env";
 import {
   buildHerbModerationPrompt,
   buildRemedyModerationPrompt,
@@ -51,6 +52,98 @@ import {
 import type { Variables } from "../router";
 
 export const submissionRoutes = new Hono<{ Variables: Variables }>();
+
+// ---------------------------------------------------------------------------
+// Shared publish helpers — reused by both the auto-publish branch
+// (right after an AI-approved submission comes in) and the admin
+// POST /:id/publish endpoint. Keeps the transaction logic in one
+// place.
+// ---------------------------------------------------------------------------
+
+type RemedySubmissionRow = typeof remedySubmissions.$inferSelect;
+type HerbSubmissionRow = typeof herbSubmissions.$inferSelect;
+
+async function publishRemedyFromSubmission(
+  sub: RemedySubmissionRow,
+  overrides: Record<string, unknown> = {},
+): Promise<{ id: string } | null> {
+  if (!sub.draft_payload) return null;
+  const draft: Record<string, unknown> = sub.draft_payload as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...draft, ...overrides };
+  return withTransaction(async (tx) => {
+    const values = {
+      ...merged,
+      submitted_by: sub.created_by ?? null,
+      approved_by_ai: true,
+      featured: false,
+      created_by: sub.created_by,
+    };
+    const inserted = (await tx
+      .insert(remedies)
+      .values(values as never)
+      .returning()) as unknown as Array<{ id: string }>;
+    const newId = inserted[0]?.id;
+    if (!newId) throw new Error("remedy insert returned no row");
+    await tx
+      .update(remedySubmissions)
+      .set({
+        moderation_status: "Approved",
+        ready_to_publish: false,
+        published_remedy_id: newId,
+        references_pending_review: false,
+        updated_date: sql`now()`,
+      })
+      .where(eq(remedySubmissions.id, sub.id));
+    return { id: newId };
+  });
+}
+
+async function publishHerbFromSubmission(
+  sub: HerbSubmissionRow,
+  overrides: Record<string, unknown> = {},
+): Promise<{ id: string } | null> {
+  if (!sub.draft_payload) return null;
+  const draft: Record<string, unknown> = sub.draft_payload as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...draft, ...overrides };
+  return withTransaction(async (tx) => {
+    const values = {
+      ...merged,
+      submitted_by: sub.created_by ?? null,
+      community_contributed: true,
+      featured: false,
+      created_by: sub.created_by,
+    };
+    const inserted = (await tx
+      .insert(herbs)
+      .values(values as never)
+      .returning()) as unknown as Array<{ id: string }>;
+    const newId = inserted[0]?.id;
+    if (!newId) throw new Error("herb insert returned no row");
+    await tx
+      .update(herbSubmissions)
+      .set({
+        moderation_status: "Approved",
+        ready_to_publish: false,
+        published_herb_id: newId,
+        references_pending_review: false,
+        updated_date: sql`now()`,
+      })
+      .where(eq(herbSubmissions.id, sub.id));
+    return { id: newId };
+  });
+}
+
+/**
+ * Auto-publish eligibility: AI returned "Approved" AND risk is bounded.
+ * Flipping AUTO_PUBLISH_APPROVED=false reverts to the "every submission
+ * waits for admin" behaviour.
+ */
+function autoPublishEligible(moderationStatus: string | null | undefined, risk: string | null | undefined): boolean {
+  if (!getEnv().AUTO_PUBLISH_APPROVED) return false;
+  if (moderationStatus !== "Approved") return false;
+  if (risk !== "Low" && risk !== "Moderate") return false;
+  return true;
+}
 
 // ---------------------------------------------------------------------------
 // Remedy submission
@@ -190,12 +283,34 @@ submissionRoutes.post("/remedy", async (c) => {
     })
     .returning()) as unknown as Array<{ id: string }>;
 
+  // Auto-publish branch: skip the admin wait when the AI is confident
+  // and risk is bounded.
+  let publishedId: string | null = null;
+  if (saved?.id && verdict && autoPublishEligible(verdict.moderation_status, verdict.risk_level)) {
+    try {
+      // Re-fetch the row we just wrote so publish helper gets the full shape.
+      const [subRow] = await db
+        .select()
+        .from(remedySubmissions)
+        .where(eq(remedySubmissions.id, saved.id))
+        .limit(1);
+      if (subRow) {
+        const r = await publishRemedyFromSubmission(subRow);
+        publishedId = r?.id ?? null;
+      }
+    } catch (err) {
+      console.error("[submission-remedy] auto-publish failed; left as draft", err);
+    }
+  }
+
   await logEvent({
     endpoint: "submission-remedy",
     userEmail: user.email,
     submissionId: saved?.id ?? null,
     inputHash,
-    verdict: verdict?.moderation_status ?? "deferred",
+    verdict: publishedId
+      ? "auto_published"
+      : verdict?.moderation_status ?? "deferred",
     model: modelUsed || null,
     provider: "groq",
     searchProvider: searchOutcome.provider,
@@ -203,17 +318,23 @@ submissionRoutes.post("/remedy", async (c) => {
     outputTokens: usageOutput,
     errorCode,
     summary: verdict
-      ? { risk_level: verdict.risk_level, refs: verdict.draft.research_references.length }
+      ? {
+          risk_level: verdict.risk_level,
+          refs: verdict.draft.research_references.length,
+          published_id: publishedId,
+        }
       : null,
   });
 
   return c.json({
     id: saved?.id,
     moderation_status: verdict?.moderation_status ?? "Pending Review",
-    ready_to_publish: verdict?.moderation_status === "Approved",
+    ready_to_publish: verdict?.moderation_status === "Approved" && !publishedId,
     ai_feedback: verdict?.ai_feedback ?? "Awaiting review",
-    references_pending_review: true,
+    references_pending_review: !publishedId,
     deferred: !verdict,
+    published_remedy_id: publishedId,
+    auto_published: !!publishedId,
   });
 });
 
@@ -344,12 +465,31 @@ submissionRoutes.post("/herb", async (c) => {
     })
     .returning()) as unknown as Array<{ id: string }>;
 
+  let publishedId: string | null = null;
+  if (saved?.id && verdict && autoPublishEligible(verdict.moderation_status, verdict.risk_level)) {
+    try {
+      const [subRow] = await db
+        .select()
+        .from(herbSubmissions)
+        .where(eq(herbSubmissions.id, saved.id))
+        .limit(1);
+      if (subRow) {
+        const r = await publishHerbFromSubmission(subRow);
+        publishedId = r?.id ?? null;
+      }
+    } catch (err) {
+      console.error("[submission-herb] auto-publish failed; left as draft", err);
+    }
+  }
+
   await logEvent({
     endpoint: "submission-herb",
     userEmail: user.email,
     submissionId: saved?.id ?? null,
     inputHash,
-    verdict: verdict?.moderation_status ?? "deferred",
+    verdict: publishedId
+      ? "auto_published"
+      : verdict?.moderation_status ?? "deferred",
     model: modelUsed || null,
     provider: "groq",
     searchProvider: searchOutcome.provider,
@@ -357,23 +497,31 @@ submissionRoutes.post("/herb", async (c) => {
     outputTokens: usageOutput,
     errorCode,
     summary: verdict
-      ? { risk_level: verdict.risk_level, refs: verdict.draft.research_references.length }
+      ? {
+          risk_level: verdict.risk_level,
+          refs: verdict.draft.research_references.length,
+          published_id: publishedId,
+        }
       : null,
   });
 
   return c.json({
     id: saved?.id,
     moderation_status: verdict?.moderation_status ?? "Pending Review",
-    ready_to_publish: verdict?.moderation_status === "Approved",
+    ready_to_publish: verdict?.moderation_status === "Approved" && !publishedId,
     ai_feedback: verdict?.ai_feedback ?? "Awaiting review",
-    references_pending_review: true,
+    references_pending_review: !publishedId,
     deferred: !verdict,
+    published_herb_id: publishedId,
+    auto_published: !!publishedId,
   });
 });
 
 // ---------------------------------------------------------------------------
 // Admin publish — takes the stored draft, allows overrides, inserts the
-// real Herb/Remedy row inside a transaction.
+// real Herb/Remedy row inside a transaction. Also used when auto-publish
+// is disabled (AUTO_PUBLISH_APPROVED=false) and the admin reviews
+// every submission manually.
 // ---------------------------------------------------------------------------
 
 function requireAdmin(c: Context<{ Variables: Variables }>) {
@@ -402,35 +550,9 @@ submissionRoutes.post("/remedy/:id/publish", async (c) => {
   if (!sub.draft_payload) {
     throw new HTTPException(400, { message: "Submission has no draft payload to publish" });
   }
-
-  const draft: Record<string, unknown> = (sub.draft_payload ?? {}) as Record<string, unknown>;
-  const merged: Record<string, unknown> = { ...draft, ...overrides };
-
-  const created = await withTransaction(async (tx) => {
-    const values = {
-      ...merged,
-      submitted_by: sub.created_by ?? null,
-      approved_by_ai: true,
-      featured: false,
-      created_by: sub.created_by,
-    };
-    const [inserted] = await tx
-      .insert(remedies)
-      .values(values as never)
-      .returning();
-    await tx
-      .update(remedySubmissions)
-      .set({
-        moderation_status: "Approved",
-        ready_to_publish: false,
-        published_remedy_id: (inserted as { id: string }).id,
-        references_pending_review: false,
-        updated_date: sql`now()`,
-      })
-      .where(eq(remedySubmissions.id, id));
-    return inserted;
-  });
-  return c.json(created, 201);
+  const result = await publishRemedyFromSubmission(sub, overrides);
+  if (!result) throw new HTTPException(500, { message: "publish returned no row" });
+  return c.json(result, 201);
 });
 
 submissionRoutes.post("/herb/:id/publish", async (c) => {
@@ -448,33 +570,7 @@ submissionRoutes.post("/herb/:id/publish", async (c) => {
   if (!sub.draft_payload) {
     throw new HTTPException(400, { message: "Submission has no draft payload to publish" });
   }
-
-  const draft: Record<string, unknown> = (sub.draft_payload ?? {}) as Record<string, unknown>;
-  const merged: Record<string, unknown> = { ...draft, ...overrides };
-
-  const created = await withTransaction(async (tx) => {
-    const values = {
-      ...merged,
-      submitted_by: sub.created_by ?? null,
-      community_contributed: true,
-      featured: false,
-      created_by: sub.created_by,
-    };
-    const [inserted] = await tx
-      .insert(herbs)
-      .values(values as never)
-      .returning();
-    await tx
-      .update(herbSubmissions)
-      .set({
-        moderation_status: "Approved",
-        ready_to_publish: false,
-        published_herb_id: (inserted as { id: string }).id,
-        references_pending_review: false,
-        updated_date: sql`now()`,
-      })
-      .where(eq(herbSubmissions.id, id));
-    return inserted;
-  });
-  return c.json(created, 201);
+  const result = await publishHerbFromSubmission(sub, overrides);
+  if (!result) throw new HTTPException(500, { message: "publish returned no row" });
+  return c.json(result, 201);
 });
