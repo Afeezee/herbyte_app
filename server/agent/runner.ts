@@ -106,6 +106,11 @@ export type AgentRunReport = {
 // Driver — runs up to `n` posts, respecting the DB-backed daily cap.
 // ---------------------------------------------------------------------------
 
+// Max concurrent runOne() invocations per batch. Groq free-tier RPM
+// is 25-30, so 4 in-flight stays well under while letting a cron
+// finish 12 posts inside the 60s Hobby function cap.
+const BATCH_CONCURRENCY = 4;
+
 export async function runAgentBatch(n: number, opts: AgentRunOptions): Promise<AgentRunReport> {
   const env = getEnv();
 
@@ -146,15 +151,31 @@ export async function runAgentBatch(n: number, opts: AgentRunOptions): Promise<A
   const allowed = Math.max(0, Math.min(n, dailyCap - todayCount));
   const results: PerPostResult[] = [];
   let posted = 0;
-  for (let i = 0; i < allowed; i++) {
-    // Re-check the cap each iteration — a different runner invocation
-    // (manual CLI mid-cron, or two crons overlapping) could have moved
-    // the counter forward.
+
+  // Parallel batches: run up to BATCH_CONCURRENCY posts in flight at
+  // once, re-checking the DB cap between batches so two overlapping
+  // invocations can't overshoot. Sequential within one post (research →
+  // draft → image → submit) but parallel across posts.
+  let launched = 0;
+  while (launched < allowed) {
     const current = await countAgentSubmissionsToday(env.AGENT_AUTHOR_EMAIL);
     if (current >= dailyCap) break;
-    const r = await runOne(opts);
-    results.push(r);
-    if (r.ok && !opts.dryRun) posted++;
+    const remainingByCap = dailyCap - current;
+    const remainingByRequest = allowed - launched;
+    const size = Math.min(BATCH_CONCURRENCY, remainingByCap, remainingByRequest);
+    if (size <= 0) break;
+    const batch = await Promise.all(
+      Array.from({ length: size }, () => runOne(opts).catch((err) => ({
+        ok: false as const,
+        kind: "remedy" as const,
+        error: `runOne threw: ${(err as Error).message}`,
+      }))),
+    );
+    for (const r of batch) {
+      results.push(r as PerPostResult);
+      if (r.ok && !opts.dryRun) posted++;
+    }
+    launched += size;
   }
 
   const todayAfter = await countAgentSubmissionsToday(env.AGENT_AUTHOR_EMAIL);
@@ -186,6 +207,9 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
   }
 
   const avoid = knownNames(snapshot, plan.kind);
+  // For remedies, pass the set of primary herbs already covered so the
+  // model doesn't invent a third tea built around Moringa, etc.
+  const remedyAvoidHerbs = plan.kind === "remedy" ? snapshot.remedyPrimaryHerbs : [];
   let choice: HerbChoice | RemedyChoice | null = null;
   for (let attempt = 0; attempt < 3 && !choice; attempt++) {
     try {
@@ -208,12 +232,19 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
           category: plan.category,
           region: plan.region,
           avoid: avoid.slice(0, 60),
+          avoidPrimaryHerbs: remedyAvoidHerbs.slice(0, 40),
           researchResults,
         });
         const r = await chatJson({ system, user, temperature: 0.6, parse: (o) => remedyChoiceSchema.parse(o) });
         const c = r.json;
         if (nameConflicts(c.name, avoid)) {
           avoid.push(c.name);
+          continue;
+        }
+        // Reject if the primary herb is already heavily used in existing
+        // remedies — forces the model to pick a different star herb.
+        if (c.primary_herb_name && nameConflicts(c.primary_herb_name, remedyAvoidHerbs)) {
+          remedyAvoidHerbs.push(c.primary_herb_name);
           continue;
         }
         choice = c;

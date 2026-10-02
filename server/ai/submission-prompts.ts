@@ -123,6 +123,15 @@ export function buildRemedyModerationPrompt(
     : "(no results)";
   const user = `Task: review the following community-submitted remedy. Decide moderation_status (Approved / Flagged - Risk Identified / Rejected), risk_level (Low/Moderate/High/Critical), whether expert review is required, and produce an enriched draft record that would be safe to publish as a Herbyte Remedy. The submitter's phrasing may be sparse — flesh out description, safety_rating, contraindications, drug_interactions and side_effects using standard herbalism knowledge. Use the search_results block for citations only.
 
+MANDATORY output fields (must not be empty):
+- draft.name — a specific remedy name (not generic)
+- draft.description — 2–5 full sentences describing the remedy, its traditional use, and what to expect. NEVER leave blank.
+- draft.herbs_used — array including the primary herb AND every companion herb, minimum one entry.
+- draft.primary_herb_name
+- draft.health_condition
+- draft.preparation_method
+- draft.research_references — if <search_results> has entries, cite AT LEAST ONE whose url matches a search_results url exactly. If <search_results> is empty, return an empty array.
+
 <user_input>Submitted remedy:
 - Name: ${wrapUserInput(input.name)}
 - Primary herb: ${wrapUserInput(input.primary_herb_name)}
@@ -220,6 +229,12 @@ export function buildHerbModerationPrompt(
         .join("\n")
     : "(no results)";
   const user = `Task: review the following community-submitted HERB entry and produce an enriched draft record safe to publish as a Herbyte Herb. Flesh out health benefits (with evidence_level), preparation methods, drug interactions, contraindications, side effects and major compounds using standard herbalism knowledge. Use the search_results block for citations only.
+
+MANDATORY output fields (must not be empty):
+- draft.common_name
+- draft.description — 3–6 full sentences. NEVER leave blank.
+- draft.research_references — if <search_results> has entries, cite AT LEAST ONE whose url matches exactly. If empty, return [].
+- draft.health_benefits — at least one { benefit, evidence_level } entry.
 
 <user_input>Submitted herb:
 - Common name: ${wrapUserInput(input.common_name)}

@@ -179,8 +179,11 @@ submissionRoutes.post("/remedy", async (c) => {
     }
   }
 
-  // Search context for the model.
-  const searchQuery = `"${input.name}" ${input.primary_herb_name} ${input.health_condition} drug interactions contraindications research`;
+  // Search context for the model. Key the query on the primary herb +
+  // health condition (real search targets) rather than the newly-invented
+  // remedy name (which is unique to this submission and returns zero
+  // hits), so Serper actually returns citations we can verify.
+  const searchQuery = `${input.primary_herb_name} ${input.health_condition} clinical study pubmed drug interactions contraindications`;
   const searchOutcome = await search(searchQuery);
 
   const { system, user: userMsg } = buildRemedyModerationPrompt(input, searchOutcome.results);
@@ -255,6 +258,24 @@ submissionRoutes.post("/remedy", async (c) => {
     if (input.image_url && !verdict.draft.image_url) {
       verdict.draft.image_url = input.image_url;
     }
+    // Backfill fields the model may have left blank. The remedies table
+    // has description NOT NULL, and the UI reads herbs_used — if the AI
+    // drops either, use the submitter's own text as a baseline so the
+    // published row is never empty.
+    if (!verdict.draft.description || verdict.draft.description.trim().length < 20) {
+      verdict.draft.description = `${input.name}: ${input.observed_effects}. Prepared by ${input.preparation_method}`.slice(0, 2000);
+    }
+    if (!verdict.draft.herbs_used || verdict.draft.herbs_used.length === 0) {
+      verdict.draft.herbs_used = [input.primary_herb_name, ...(input.herbs_used ?? [])];
+    } else if (!verdict.draft.herbs_used.includes(input.primary_herb_name)) {
+      verdict.draft.herbs_used = [input.primary_herb_name, ...verdict.draft.herbs_used];
+    }
+    if (!verdict.draft.primary_herb_name) {
+      verdict.draft.primary_herb_name = input.primary_herb_name;
+    }
+    if (!verdict.draft.name) verdict.draft.name = input.name;
+    if (!verdict.draft.health_condition) verdict.draft.health_condition = input.health_condition;
+    if (!verdict.draft.preparation_method) verdict.draft.preparation_method = input.preparation_method;
   } catch (err) {
     errorCode =
       err instanceof GroqError ? err.code : err instanceof z.ZodError ? "invalid_json" : "internal";
@@ -381,7 +402,7 @@ submissionRoutes.post("/herb", async (c) => {
     }
   }
 
-  const searchQuery = `"${input.common_name}" ${input.botanical_name ?? ""} drug interactions contraindications research`;
+  const searchQuery = `${input.common_name} ${input.botanical_name ?? ""} clinical study pubmed drug interactions contraindications`;
   const searchOutcome = await search(searchQuery);
 
   const { system, user: userMsg } = buildHerbModerationPrompt(input, searchOutcome.results);
@@ -449,6 +470,14 @@ submissionRoutes.post("/herb", async (c) => {
     );
     if (input.image_url && !verdict.draft.image_url) {
       verdict.draft.image_url = input.image_url;
+    }
+    // Backfill from submitter input when the AI dropped a required field.
+    if (!verdict.draft.description || verdict.draft.description.trim().length < 20) {
+      verdict.draft.description = input.description;
+    }
+    if (!verdict.draft.common_name) verdict.draft.common_name = input.common_name;
+    if (!verdict.draft.botanical_name && input.botanical_name) {
+      verdict.draft.botanical_name = input.botanical_name;
     }
   } catch (err) {
     errorCode =

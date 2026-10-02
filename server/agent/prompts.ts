@@ -62,17 +62,23 @@ export function buildRemedyChoicePrompt(opts: {
   category: Category;
   region: Region;
   avoid: string[];
+  /** Primary herbs already used by one or more existing remedies — pick a different star herb. */
+  avoidPrimaryHerbs?: string[];
   researchResults?: SearchResult[] | null;
 }): { system: string; user: string } {
   const system = `You are a research-oriented herbalist curator for Herbyte. Draft ONE community-remedy entry that fits the brief.
 
 ${safetyInstruction}
 
+Field rules:
+- "herbs_used" MUST include the primary herb AND 0–4 companion herbs. Never return it empty.
+- "preparation_method" and "observed_effects" MUST be real multi-sentence text, not placeholders.
+
 JSON schema:
 {
   "name": string,                     // short descriptive name of the remedy
   "primary_herb_name": string,        // the main herb
-  "herbs_used": string[],             // other herbs included, 0–4
+  "herbs_used": string[],             // ALL herbs in the remedy, primary first, 1–5 total
   "health_condition": string,         // the ailment it addresses (short noun phrase)
   "preparation_method": string,       // 2–6 sentences of instructions
   "dosage": string,                   // e.g. "1 cup twice daily, up to 14 days"
@@ -85,6 +91,11 @@ JSON schema:
     `Avoid repeating any of these already-covered remedies:`,
     opts.avoid.length ? opts.avoid.map((n) => `  - ${n}`).join("\n") : "  (none yet)",
   ];
+  if (opts.avoidPrimaryHerbs && opts.avoidPrimaryHerbs.length) {
+    parts.push("");
+    parts.push("ALSO AVOID picking any of these primary herbs — they are already heavily used in existing remedies. Choose a different star herb:");
+    parts.push(opts.avoidPrimaryHerbs.map((n) => `  - ${n}`).join("\n"));
+  }
   if (opts.researchResults) {
     parts.push("");
     parts.push("Ground the entry in these fresh search snippets. Prefer a remedy the snippets actually describe:");

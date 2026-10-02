@@ -46,9 +46,11 @@ const schema = z.object({
   GROQ_API_KEY: optionalTrimmed,
   AI_MODEL: z.string().default("openai/gpt-oss-20b"),
   AI_FALLBACK_MODEL: z.string().default("openai/gpt-oss-120b"),
+  // Budgets — bumped for the OpenAI OSS models which have higher free-tier
+  // allowances than the earlier qwen Preview.
   GROQ_RPM_CEILING: positiveInt(25),
-  GROQ_TPM_CEILING: positiveInt(7000),
-  GROQ_TPD_CEILING: positiveInt(180000),
+  GROQ_TPM_CEILING: positiveInt(20000),
+  GROQ_TPD_CEILING: positiveInt(300000),
 
   // Search grounding
   SERPER_API_KEY: optionalTrimmed,
@@ -91,7 +93,7 @@ const schema = z.object({
     .transform((v) => v === undefined || v === "" ? true : v.toLowerCase() !== "false"),
 
   // Content agent limits (easy to override in Vercel / local env).
-  AGENT_DAILY_CAP: positiveInt(12),
+  AGENT_DAILY_CAP: positiveInt(24),
   AGENT_RESEARCH_RATIO: z
     .string()
     .optional()

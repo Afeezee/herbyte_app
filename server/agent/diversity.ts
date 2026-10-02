@@ -6,6 +6,7 @@
  */
 import { getDb } from "../db";
 import { herbs, remedies, herbSubmissions, remedySubmissions } from "../schema";
+import { sql } from "drizzle-orm";
 
 export const CATEGORIES = [
   "Adaptogen",
@@ -38,16 +39,23 @@ export type Region = (typeof REGIONS)[number];
 export type DbSnapshot = {
   herbs: Array<{ name: string; category: Category | null; region: Region | null }>;
   remedies: Array<{ name: string; category: Category | null; region: Region | null }>;
+  /** Primary herbs already covered by one or more remedies (dedup for new remedy choice). */
+  remedyPrimaryHerbs: string[];
 };
 
 export async function readDbSnapshot(): Promise<DbSnapshot> {
   const db = getDb();
-  const [h, r, hs, rs] = await Promise.all([
+  const [h, r, hs, rs, rsub] = await Promise.all([
     db
       .select({ name: herbs.common_name, category: herbs.category, region: herbs.region })
       .from(herbs),
     db
-      .select({ name: remedies.name, category: remedies.category, region: remedies.region })
+      .select({
+        name: remedies.name,
+        category: remedies.category,
+        region: remedies.region,
+        primary_herb_name: remedies.primary_herb_name,
+      })
       .from(remedies),
     db
       .select({
@@ -59,7 +67,15 @@ export async function readDbSnapshot(): Promise<DbSnapshot> {
     db
       .select({ name: remedySubmissions.health_condition })
       .from(remedySubmissions),
+    // Pending-submission primary herbs live inside draft_payload.
+    db
+      .select({ primary: sql<string>`${remedySubmissions.draft_payload}->>'primary_herb_name'` })
+      .from(remedySubmissions),
   ]);
+
+  const remedyPrimaries = new Set<string>();
+  for (const x of r) if (x.primary_herb_name) remedyPrimaries.add(x.primary_herb_name);
+  for (const x of rsub) if (x.primary) remedyPrimaries.add(x.primary);
 
   return {
     herbs: [...h, ...hs].map((x) => ({
@@ -73,12 +89,9 @@ export async function readDbSnapshot(): Promise<DbSnapshot> {
         category: x.category as Category | null,
         region: x.region as Region | null,
       })),
-      // Remedy submissions carry health_condition instead of
-      // category/region on the row (taxonomy lives in draft_payload
-      // after enrichment); we track them by health_condition so the
-      // agent doesn't repeat recent ailments.
       ...rs.map((x) => ({ name: x.name, category: null, region: null })),
     ],
+    remedyPrimaryHerbs: [...remedyPrimaries],
   };
 }
 
