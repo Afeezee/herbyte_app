@@ -5,7 +5,7 @@
  * the agent only produces the baseline input a human submitter would
  * type into the form.
  */
-import type { Category, Region } from "./diversity";
+import type { Category, HealthCondition, Region } from "./diversity";
 import type { SearchResult } from "../ai/search";
 
 const safetyInstruction = `Rules:
@@ -64,6 +64,8 @@ export function buildRemedyChoicePrompt(opts: {
   avoid: string[];
   /** Primary herbs already used by one or more existing remedies — pick a different star herb. */
   avoidPrimaryHerbs?: string[];
+  /** Specific health condition this remedy MUST target. */
+  targetCondition?: HealthCondition | null;
   researchResults?: SearchResult[] | null;
 }): { system: string; user: string } {
   const system = `You are a research-oriented herbalist curator for Herbyte. Draft ONE community-remedy entry that fits the brief.
@@ -86,11 +88,19 @@ JSON schema:
   "observed_effects": string          // what folk use expects to see
 }`;
 
-  const parts: string[] = [
-    `Brief: a remedy from the **${opts.region}** herbal tradition that fits the **${opts.category}** category.`,
+  const parts: string[] = [];
+  if (opts.targetCondition) {
+    parts.push(
+      `Brief: a remedy from the **${opts.region}** herbal tradition targeting the specific condition **${opts.targetCondition}**.`,
+      `The health_condition field in your output MUST describe this condition. The category (${opts.category}) is secondary — if a different category fits the condition better, use the one that fits.`,
+    );
+  } else {
+    parts.push(`Brief: a remedy from the **${opts.region}** herbal tradition that fits the **${opts.category}** category.`);
+  }
+  parts.push(
     `Avoid repeating any of these already-covered remedies:`,
     opts.avoid.length ? opts.avoid.map((n) => `  - ${n}`).join("\n") : "  (none yet)",
-  ];
+  );
   if (opts.avoidPrimaryHerbs && opts.avoidPrimaryHerbs.length) {
     parts.push("");
     parts.push("ALSO AVOID picking any of these primary herbs — they are already heavily used in existing remedies. Choose a different star herb:");

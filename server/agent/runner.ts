@@ -236,6 +236,7 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
           region: plan.region,
           avoid: avoid.slice(0, 60),
           avoidPrimaryHerbs: remedyAvoidHerbs.slice(0, 40),
+          targetCondition: plan.targetCondition ?? null,
           researchResults,
         });
         const r = await chatJson({ system, user, temperature: 0.6, parse: (o) => remedyChoiceSchema.parse(o) });
