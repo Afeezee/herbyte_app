@@ -10,6 +10,7 @@ import { submissionRoutes } from "./routes/submissions";
 import { uploadRoutes } from "./routes/upload";
 import { contactRoutes } from "./routes/contact";
 import { makeAgentCronRoutes } from "./routes/agent";
+import { regenerateRoutes } from "./routes/regenerate";
 
 // -----------------------------------------------------------------------------
 // Response shape stays JSON with {error:{code,message}} on failure —
@@ -52,6 +53,7 @@ app.use("/api/auth/me", authMiddleware);
 app.use("/api/upload", authMiddleware);
 app.use("/api/ai/*", authMiddleware);
 app.use("/api/submissions/*", authMiddleware);
+app.use("/api/regenerate/*", authMiddleware);
 
 async function authMiddleware(
   c: Context<{ Variables: Variables }>,
@@ -93,6 +95,9 @@ app.route("/api/ai", aiRoutes);
 
 // Phase 5 — submission pipeline
 app.route("/api/submissions", submissionRoutes);
+
+// Regenerate agent-generated herb/remedy fields on demand (admin only).
+app.route("/api/regenerate", regenerateRoutes);
 
 // Phase 6 — uploads + contact form
 app.route("/api/upload", uploadRoutes);

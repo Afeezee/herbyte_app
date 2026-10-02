@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { X, Upload, Loader2 } from "lucide-react";
+import { X, Loader2, Sparkles } from "lucide-react";
 
 export default function EditRemedyModal({ remedy, onClose, onSuccess }) {
   const queryClient = useQueryClient();
@@ -26,6 +26,7 @@ export default function EditRemedyModal({ remedy, onClose, onSuccess }) {
     image_url: remedy.image_url || ""
   });
   const [uploadingImage, setUploadingImage] = useState(false);
+  const isAgentGenerated = !!remedy.agent_generated;
 
   const updateMutation = useMutation({
     mutationFn: (data) => api.entities.Remedy.update(remedy.id, data),
@@ -35,6 +36,37 @@ export default function EditRemedyModal({ remedy, onClose, onSuccess }) {
       onSuccess?.();
       onClose();
     },
+  });
+
+  const regenerateMutation = useMutation({
+    mutationFn: () => api.regenerate.remedy(remedy.id),
+    onSuccess: (res) => {
+      const r = res?.record;
+      if (r) {
+        setFormData({
+          name: r.name || formData.name,
+          description: r.description || formData.description,
+          primary_herb_name: r.primary_herb_name || formData.primary_herb_name,
+          herbs_used: r.herbs_used?.join(", ") || formData.herbs_used,
+          health_condition: r.health_condition || formData.health_condition,
+          preparation_method: r.preparation_method || formData.preparation_method,
+          dosage: r.dosage || formData.dosage,
+          duration_of_use: r.duration_of_use || formData.duration_of_use,
+          observed_effects: r.observed_effects || formData.observed_effects,
+          category: r.category || formData.category,
+          region: r.region || formData.region,
+          safety_rating: r.safety_rating || formData.safety_rating,
+          image_url: r.image_url || formData.image_url,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['remedy', remedy.id] });
+      queryClient.invalidateQueries({ queryKey: ['remedies'] });
+      const filled = res?.filled_fields ?? [];
+      alert(filled.length
+        ? `Filled ${filled.length} missing field(s): ${filled.join(", ")}`
+        : "No empty fields to fill — record already complete.");
+    },
+    onError: (err) => alert(`Regenerate failed: ${err?.message ?? "unknown error"}`),
   });
 
   const handleImageUpload = async (e) => {
@@ -240,10 +272,24 @@ export default function EditRemedyModal({ remedy, onClose, onSuccess }) {
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4">
-              <Button type="submit" className="flex-1 bg-[#4A7C2E] hover:bg-[#2D5016]" disabled={updateMutation.isPending}>
+            <div className="flex flex-wrap gap-3 pt-4">
+              <Button type="submit" className="flex-1 bg-[#4A7C2E] hover:bg-[#2D5016]" disabled={updateMutation.isPending || regenerateMutation.isPending}>
                 {updateMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : "Save Changes"}
               </Button>
+              {isAgentGenerated && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                  onClick={() => regenerateMutation.mutate()}
+                  disabled={regenerateMutation.isPending || updateMutation.isPending}
+                  title="Fill any empty fields with AI-generated content (web-searched)"
+                >
+                  {regenerateMutation.isPending
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Regenerating…</>
+                    : <><Sparkles className="w-4 h-4 mr-2" /> Regenerate missing</>}
+                </Button>
+              )}
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             </div>
           </form>

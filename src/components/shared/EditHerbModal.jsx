@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { X, Upload, Loader2 } from "lucide-react";
+import { X, Loader2, Sparkles } from "lucide-react";
 
 export default function EditHerbModal({ herb, onClose, onSuccess }) {
   const queryClient = useQueryClient();
@@ -22,6 +22,7 @@ export default function EditHerbModal({ herb, onClose, onSuccess }) {
     image_url: herb.image_url || ""
   });
   const [uploadingImage, setUploadingImage] = useState(false);
+  const isAgentGenerated = !!herb.agent_generated;
 
   const updateMutation = useMutation({
     mutationFn: (data) => api.entities.Herb.update(herb.id, data),
@@ -31,6 +32,35 @@ export default function EditHerbModal({ herb, onClose, onSuccess }) {
       onSuccess?.();
       onClose();
     },
+  });
+
+  const regenerateMutation = useMutation({
+    mutationFn: () => api.regenerate.herb(herb.id),
+    onSuccess: (res) => {
+      // Pull the AI-filled values into the form so the admin sees them
+      // before clicking Save.
+      const r = res?.record;
+      if (r) {
+        setFormData({
+          common_name: r.common_name || formData.common_name,
+          botanical_name: r.botanical_name || formData.botanical_name,
+          local_names: r.local_names?.join(", ") || formData.local_names,
+          description: r.description || formData.description,
+          category: r.category || formData.category,
+          region: r.region || formData.region,
+          dosage: r.dosage || formData.dosage,
+          safety_rating: r.safety_rating || formData.safety_rating,
+          image_url: r.image_url || formData.image_url,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['herb', herb.id] });
+      queryClient.invalidateQueries({ queryKey: ['herbs'] });
+      const filled = res?.filled_fields ?? [];
+      alert(filled.length
+        ? `Filled ${filled.length} missing field(s): ${filled.join(", ")}`
+        : "No empty fields to fill — record already complete.");
+    },
+    onError: (err) => alert(`Regenerate failed: ${err?.message ?? "unknown error"}`),
   });
 
   const handleImageUpload = async (e) => {
@@ -191,10 +221,24 @@ export default function EditHerbModal({ herb, onClose, onSuccess }) {
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
-              <Button type="submit" className="flex-1 bg-[#4A7C2E] hover:bg-[#2D5016]" disabled={updateMutation.isPending}>
+            <div className="flex flex-wrap gap-3 pt-4">
+              <Button type="submit" className="flex-1 bg-[#4A7C2E] hover:bg-[#2D5016]" disabled={updateMutation.isPending || regenerateMutation.isPending}>
                 {updateMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : "Save Changes"}
               </Button>
+              {isAgentGenerated && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                  onClick={() => regenerateMutation.mutate()}
+                  disabled={regenerateMutation.isPending || updateMutation.isPending}
+                  title="Fill any empty fields with AI-generated content (web-searched)"
+                >
+                  {regenerateMutation.isPending
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Regenerating…</>
+                    : <><Sparkles className="w-4 h-4 mr-2" /> Regenerate missing</>}
+                </Button>
+              )}
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             </div>
           </form>

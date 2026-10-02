@@ -66,6 +66,7 @@ type HerbSubmissionRow = typeof herbSubmissions.$inferSelect;
 async function publishRemedyFromSubmission(
   sub: RemedySubmissionRow,
   overrides: Record<string, unknown> = {},
+  { fromAgent = false }: { fromAgent?: boolean } = {},
 ): Promise<{ id: string } | null> {
   if (!sub.draft_payload) return null;
   const draft: Record<string, unknown> = sub.draft_payload as Record<string, unknown>;
@@ -76,6 +77,7 @@ async function publishRemedyFromSubmission(
       submitted_by: sub.created_by ?? null,
       approved_by_ai: true,
       featured: false,
+      agent_generated: fromAgent,
       created_by: sub.created_by,
     };
     const inserted = (await tx
@@ -101,6 +103,7 @@ async function publishRemedyFromSubmission(
 async function publishHerbFromSubmission(
   sub: HerbSubmissionRow,
   overrides: Record<string, unknown> = {},
+  { fromAgent = false }: { fromAgent?: boolean } = {},
 ): Promise<{ id: string } | null> {
   if (!sub.draft_payload) return null;
   const draft: Record<string, unknown> = sub.draft_payload as Record<string, unknown>;
@@ -111,6 +114,7 @@ async function publishHerbFromSubmission(
       submitted_by: sub.created_by ?? null,
       community_contributed: true,
       featured: false,
+      agent_generated: fromAgent,
       created_by: sub.created_by,
     };
     const inserted = (await tx
@@ -365,7 +369,7 @@ submissionRoutes.post("/remedy", async (c) => {
         .where(eq(remedySubmissions.id, saved.id))
         .limit(1);
       if (subRow) {
-        const r = await publishRemedyFromSubmission(subRow);
+        const r = await publishRemedyFromSubmission(subRow, {}, { fromAgent: isAgent });
         publishedId = r?.id ?? null;
       }
     } catch (err) {
@@ -562,7 +566,7 @@ submissionRoutes.post("/herb", async (c) => {
         .where(eq(herbSubmissions.id, saved.id))
         .limit(1);
       if (subRow) {
-        const r = await publishHerbFromSubmission(subRow);
+        const r = await publishHerbFromSubmission(subRow, {}, { fromAgent: isAgent });
         publishedId = r?.id ?? null;
       }
     } catch (err) {

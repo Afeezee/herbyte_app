@@ -163,6 +163,21 @@ const submissions = {
     }),
 }
 
+// AI regeneration — fills in missing fields on an agent-generated
+// herb or remedy using the moderation pipeline. Admin only.
+const regenerate = {
+  herb: (id) =>
+    request(`/regenerate/herb/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      body: {},
+    }),
+  remedy: (id) =>
+    request(`/regenerate/remedy/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      body: {},
+    }),
+}
+
 // ---------------------------------------------------------------------------
 // Uploads + email — the legacy SDK exposed these under
 // `integrations.Core.*`; we keep that path so the small number of
@@ -204,6 +219,7 @@ export const api = {
   auth,
   ai,
   submissions,
+  regenerate,
   integrations,
   // Convenience aliases so pages don't have to reach into integrations.Core.
   UploadFile,
