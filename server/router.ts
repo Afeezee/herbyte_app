@@ -9,6 +9,7 @@ import { aiRoutes } from "./routes/ai";
 import { submissionRoutes } from "./routes/submissions";
 import { uploadRoutes } from "./routes/upload";
 import { contactRoutes } from "./routes/contact";
+import { makeAgentCronRoutes } from "./routes/agent";
 
 // -----------------------------------------------------------------------------
 // Response shape stays JSON with {error:{code,message}} on failure —
@@ -57,7 +58,10 @@ async function authMiddleware(
   next: Next,
 ) {
   try {
-    const user = await requireUser(c.req.header("authorization"));
+    const user = await requireUser(
+      c.req.header("authorization"),
+      c.req.header("x-agent-service-token"),
+    );
     c.set("user", user);
     await next();
   } catch (err) {
@@ -94,16 +98,10 @@ app.route("/api/submissions", submissionRoutes);
 app.route("/api/upload", uploadRoutes);
 app.route("/api/contact", contactRoutes);
 
-// Cron and webhooks (phases 4/2)
-app.post("/api/cron/moderation-retry", async (c) => {
-  const env = getEnv();
-  const secret = env.CRON_SECRET;
-  const auth = c.req.header("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
-    throw new HTTPException(401, { message: "Unauthorized" });
-  }
-  return c.json({ ok: true, retried: 0 });
-});
+// Cron: content agent — hit twice a day by Vercel Cron (see vercel.json).
+// Takes `?n=6` to post 6 submissions per invocation, giving 12/day with
+// two crons. app.fetch is passed in so submission POSTs stay in-process.
+app.route("/api/cron", makeAgentCronRoutes(app.fetch.bind(app)));
 
 // -----------------------------------------------------------------------------
 // 404 + error handler — the SDK expects `{error: {code, message}}`.

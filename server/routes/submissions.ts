@@ -58,6 +58,7 @@ export const submissionRoutes = new Hono<{ Variables: Variables }>();
 
 submissionRoutes.post("/remedy", async (c) => {
   const user = c.get("user");
+  const isAgent = !!c.req.header("x-agent-service-token");
   const body = await c.req.json().catch(() => ({}));
   const parsed = remedySubmissionInputSchema.safeParse(body);
   if (!parsed.success) {
@@ -68,13 +69,18 @@ submissionRoutes.post("/remedy", async (c) => {
   }
   const input = parsed.data;
 
-  const rl = await checkAndConsume("submissions", user.email);
-  if (!rl.ok) {
-    c.header("Retry-After", String(rl.retryAfterSeconds));
-    throw new HTTPException(429, {
-      message: rl.message,
-      cause: { code: "rate_limited" },
-    });
+  // Content agent runs its own daily cap (AGENT_DAILY_CAP, enforced in
+  // scripts/generate-content.ts). Skip the per-user 5/day cap so the
+  // agent isn't blocked at 6+ posts/day.
+  if (!isAgent) {
+    const rl = await checkAndConsume("submissions", user.email);
+    if (!rl.ok) {
+      c.header("Retry-After", String(rl.retryAfterSeconds));
+      throw new HTTPException(429, {
+        message: rl.message,
+        cause: { code: "rate_limited" },
+      });
+    }
   }
 
   // Search context for the model.
@@ -217,6 +223,7 @@ submissionRoutes.post("/remedy", async (c) => {
 
 submissionRoutes.post("/herb", async (c) => {
   const user = c.get("user");
+  const isAgent = !!c.req.header("x-agent-service-token");
   const body = await c.req.json().catch(() => ({}));
   const parsed = herbSubmissionInputSchema.safeParse(body);
   if (!parsed.success) {
@@ -227,13 +234,15 @@ submissionRoutes.post("/herb", async (c) => {
   }
   const input = parsed.data;
 
-  const rl = await checkAndConsume("submissions", user.email);
-  if (!rl.ok) {
-    c.header("Retry-After", String(rl.retryAfterSeconds));
-    throw new HTTPException(429, {
-      message: rl.message,
-      cause: { code: "rate_limited" },
-    });
+  if (!isAgent) {
+    const rl = await checkAndConsume("submissions", user.email);
+    if (!rl.ok) {
+      c.header("Retry-After", String(rl.retryAfterSeconds));
+      throw new HTTPException(429, {
+        message: rl.message,
+        cause: { code: "rate_limited" },
+      });
+    }
   }
 
   const searchQuery = `"${input.common_name}" ${input.botanical_name ?? ""} drug interactions contraindications research`;

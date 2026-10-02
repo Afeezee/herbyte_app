@@ -19,7 +19,8 @@
     "db:studio": "drizzle-kit studio",
     "import:data": "tsx scripts/import-legacy-data.ts",
     "rehost:media": "tsx scripts/rehost-media.ts",
-    "probe:groq": "tsx scripts/probe-groq.ts"
+    "probe:groq": "tsx scripts/probe-groq.ts",
+    "agent": "tsx scripts/generate-content.ts"
   },
   "dependencies": {
     "@clerk/backend": "^1.20.0",

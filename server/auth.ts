@@ -169,12 +169,84 @@ function toSessionUser(row: typeof users.$inferSelect): SessionUser {
 /**
  * One-call helper for handlers: verify + resolve. Throws AuthError which the
  * router maps to HTTP 401.
+ *
+ * Also accepts a service-token header (X-Agent-Service-Token) when the
+ * matching AGENT_SERVICE_TOKEN env is set — in which case the request is
+ * authenticated as AGENT_AUTHOR_EMAIL (upserting the row if missing).
+ * Used by the content-generator script in scripts/generate-content.ts.
  */
 export async function requireUser(
   authorizationHeader: string | null | undefined,
+  serviceTokenHeader?: string | null,
 ): Promise<SessionUser> {
+  const env = getEnv();
+
+  if (
+    serviceTokenHeader &&
+    env.AGENT_SERVICE_TOKEN &&
+    env.AGENT_AUTHOR_EMAIL &&
+    timingSafeEqual(serviceTokenHeader, env.AGENT_SERVICE_TOKEN)
+  ) {
+    return resolveServiceUser(
+      env.AGENT_AUTHOR_EMAIL,
+      env.AGENT_AUTHOR_NAME ?? null,
+    );
+  }
+
   const { userId } = await verifyClerkToken(authorizationHeader);
   return resolveSessionUser(userId);
+}
+
+/**
+ * Constant-time string comparison so a malicious caller can't learn the
+ * token one byte at a time from timing differences.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/**
+ * Upsert the agent's user row and return the SessionUser. Never marks
+ * the row as admin — the service token should never carry admin
+ * capabilities even if AGENT_AUTHOR_EMAIL happens to be in ADMIN_EMAILS.
+ */
+async function resolveServiceUser(
+  rawEmail: string,
+  fullName: string | null,
+): Promise<SessionUser> {
+  const db = getDb();
+  const email = rawEmail.toLowerCase();
+
+  const existing = await db
+    .select()
+    .from(users)
+    .where(sql`lower(${users.email}) = ${email}`)
+    .limit(1);
+  if (existing[0]) {
+    // Keep the row's existing name if it's set; otherwise fill it in.
+    if (!existing[0].full_name && fullName) {
+      const updated = await db
+        .update(users)
+        .set({ full_name: fullName, updated_date: sql`now()` })
+        .where(eq(users.id, existing[0].id))
+        .returning();
+      return toSessionUser(updated[0] ?? existing[0]);
+    }
+    return toSessionUser(existing[0]);
+  }
+
+  const inserted = await db
+    .insert(users)
+    .values({ email, full_name: fullName, role: "user" })
+    .returning();
+  const row = inserted[0];
+  if (!row) throw new AuthError("internal", "Failed to insert service user row.");
+  return toSessionUser(row);
 }
 
 /**

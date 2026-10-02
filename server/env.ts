@@ -33,8 +33,10 @@ const schema = z.object({
   DATABASE_URL: trimmed,
   DATABASE_URL_UNPOOLED: optionalTrimmed,
 
-  // Clerk
-  CLERK_SECRET_KEY: trimmed,
+  // Clerk — optional so the content agent (which doesn't call Clerk)
+  // can boot without it. API routes that need Clerk will throw on first
+  // use with a clear message.
+  CLERK_SECRET_KEY: optionalTrimmed,
   CLERK_WEBHOOK_SECRET: optionalTrimmed,
 
   // Groq
@@ -62,6 +64,29 @@ const schema = z.object({
 
   // Cron secret
   CRON_SECRET: optionalTrimmed,
+
+  // Content agent — service token for the generator script to submit as
+  // a specific user. When both are set, requests carrying
+  // `X-Agent-Service-Token: <AGENT_SERVICE_TOKEN>` are authenticated as
+  // AGENT_AUTHOR_EMAIL instead of going through Clerk.
+  AGENT_SERVICE_TOKEN: optionalTrimmed,
+  AGENT_AUTHOR_EMAIL: optionalTrimmed,
+  AGENT_AUTHOR_NAME: optionalTrimmed,
+
+  // Unsplash — stock photos for agent-generated herb/remedy entries.
+  UNSPLASH_ACCESS_KEY: optionalTrimmed,
+
+  // Content agent limits (easy to override in Vercel / local env).
+  AGENT_DAILY_CAP: positiveInt(12),
+  AGENT_RESEARCH_RATIO: z
+    .string()
+    .optional()
+    .transform((v) => {
+      if (!v) return 0.5;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0 || n > 1) return 0.5;
+      return n;
+    }),
 
   // Legacy media rehost source host
   LEGACY_MEDIA_HOST: z.string().default("base44.app"),

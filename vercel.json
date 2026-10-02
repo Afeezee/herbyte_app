@@ -18,10 +18,19 @@
       ]
     }
   ],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
-      "path": "/api/cron/moderation-retry",
-      "schedule": "0 3 * * *"
+      "path": "/api/cron/run-agent?n=6",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/run-agent?n=6",
+      "schedule": "0 18 * * *"
     }
   ]
 }
