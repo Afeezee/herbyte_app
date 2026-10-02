@@ -12,6 +12,49 @@ import { wrapUserInput } from "./prompts";
 import type { SearchResult } from "./search";
 
 const safetyRatings = ["Generally Safe", "Use with Caution", "High Risk - Expert Guidance Required"] as const;
+
+/**
+ * Case-insensitive normaliser for safety_rating. Models return a
+ * surprising range of near-matches: "Safe", "safe", "safe (with notes)",
+ * "Low Risk", "generally_safe", "Mild Caution" etc. Previously anything
+ * off-enum fell through to .catch("Use with Caution") which labelled
+ * almost every entry as Use with Caution even when the AI meant safe.
+ *
+ * Map broad patterns to the canonical enum value; only truly ambiguous
+ * strings fall through to the cautious default.
+ */
+const safetyRatingSchema = z.preprocess((v) => {
+  if (typeof v !== "string") return v;
+  const s = v.trim().toLowerCase();
+  // Already canonical — fast path.
+  if (s === "generally safe") return "Generally Safe";
+  if (s === "use with caution") return "Use with Caution";
+  if (s === "high risk - expert guidance required") return "High Risk - Expert Guidance Required";
+  // High-risk variants
+  if (s.includes("expert") || s.includes("high risk") || s === "high" || s === "unsafe" || s === "dangerous" || s === "critical")
+    return "High Risk - Expert Guidance Required";
+  // Caution variants
+  if (s.includes("caution") || s.includes("moderate") || s === "moderate risk" || s.includes("warning"))
+    return "Use with Caution";
+  // Safe variants (checked after caution so "safe with caution" still maps to Caution)
+  if (s === "safe" || s.startsWith("safe") || s.includes("generally safe") || s === "low risk" || s === "low" || s.includes("very safe") || s.includes("well tolerated"))
+    return "Generally Safe";
+  return v;
+}, z.enum(safetyRatings).catch("Use with Caution"));
+
+/**
+ * Same normaliser pattern for risk_level — same drift problem.
+ */
+const riskLevelSchema = z.preprocess((v) => {
+  if (typeof v !== "string") return v;
+  const s = v.trim().toLowerCase();
+  if (s === "low") return "Low";
+  if (s === "moderate" || s === "medium" || s === "mid") return "Moderate";
+  if (s === "high") return "High";
+  if (s === "critical" || s === "severe" || s === "very high") return "Critical";
+  return v;
+}, z.enum(["Low", "Moderate", "High", "Critical"]).catch("Moderate"));
+
 const regions = [
   "Africa",
   "Asia",
@@ -78,11 +121,8 @@ export const remedyModerationOutputSchema = z.object({
     "Rejected",
   ]).catch("Pending Review"),
   ai_feedback: z.string().catch("(no feedback)"),
-  risk_level: z.enum(["Low", "Moderate", "High", "Critical"]).catch("Moderate"),
+  risk_level: riskLevelSchema,
   expert_review_required: z.boolean().catch(false),
-  // Enriched draft — used when the admin later publishes it as a real Remedy.
-  // Enums fall back to safe defaults so a single off-vocab value doesn't
-  // fail the whole response.
   draft: z.object({
     name: z.string(),
     description: z.string().catch(""),
@@ -98,12 +138,10 @@ export const remedyModerationOutputSchema = z.object({
     drug_interactions: z.array(z.string()).catch([]),
     contraindications: z.array(z.string()).catch([]),
     side_effects: z.array(z.string()).catch([]),
-    safety_rating: z.enum(safetyRatings).catch("Use with Caution"),
+    safety_rating: safetyRatingSchema,
     category: z.enum(categories).catch("Other"),
     region: z.enum(regions).catch("Global"),
     research_references: z.array(referenceSchema).catch([]),
-    // Not emitted by the model — populated server-side from the
-    // submitter's image_url so it survives into the published row.
     image_url: z.string().url().optional(),
   }),
 });
@@ -131,6 +169,10 @@ MANDATORY output fields (must not be empty):
 - draft.health_condition
 - draft.preparation_method
 - draft.research_references — if <search_results> has entries, cite AT LEAST ONE whose url matches a search_results url exactly. If <search_results> is empty, return an empty array.
+
+ENUM VALUES must be returned EXACTLY — case, spaces, punctuation:
+- draft.safety_rating: one of "Generally Safe" | "Use with Caution" | "High Risk - Expert Guidance Required". Pick "Generally Safe" for well-established herbs with no major contraindications (e.g. ginger, chamomile at culinary doses). Only use "Use with Caution" when there is a real documented interaction or risk group to warn about. Reserve "High Risk - Expert Guidance Required" for herbs that need practitioner supervision.
+- risk_level: "Low" | "Moderate" | "High" | "Critical".
 
 <user_input>Submitted remedy:
 - Name: ${wrapUserInput(input.name)}
@@ -173,7 +215,7 @@ export const herbModerationOutputSchema = z.object({
     "Rejected",
   ]).catch("Pending Review"),
   ai_feedback: z.string().catch("(no feedback)"),
-  risk_level: z.enum(["Low", "Moderate", "High", "Critical"]).catch("Moderate"),
+  risk_level: riskLevelSchema,
   expert_review_required: z.boolean().catch(false),
   draft: z.object({
     common_name: z.string(),
@@ -208,9 +250,7 @@ export const herbModerationOutputSchema = z.object({
     side_effects: z.array(z.string()).catch([]),
     major_compounds: z.array(z.string()).catch([]),
     research_references: z.array(referenceSchema).catch([]),
-    safety_rating: z.enum(safetyRatings).catch("Use with Caution"),
-    // Not emitted by the model — populated server-side from the
-    // submitter's image_url so it survives into the published row.
+    safety_rating: safetyRatingSchema,
     image_url: z.string().url().optional(),
   }),
 });
@@ -235,6 +275,10 @@ MANDATORY output fields (must not be empty):
 - draft.description — 3–6 full sentences. NEVER leave blank.
 - draft.research_references — if <search_results> has entries, cite AT LEAST ONE whose url matches exactly. If empty, return [].
 - draft.health_benefits — at least one { benefit, evidence_level } entry.
+
+ENUM VALUES must be returned EXACTLY — case, spaces, punctuation:
+- draft.safety_rating: one of "Generally Safe" | "Use with Caution" | "High Risk - Expert Guidance Required". Pick "Generally Safe" for well-established culinary herbs with no major contraindications. Only use "Use with Caution" when there is a real documented interaction or risk group. Reserve "High Risk - Expert Guidance Required" for herbs that need practitioner supervision.
+- risk_level: "Low" | "Moderate" | "High" | "Critical".
 
 <user_input>Submitted herb:
 - Common name: ${wrapUserInput(input.common_name)}
