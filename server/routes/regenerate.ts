@@ -20,6 +20,8 @@ import { reserveBudget, recordUsage } from "../ai/budget";
 import { chatJson, estimateChatTokens } from "../ai/groq";
 import { search, filterCitedReferences } from "../ai/search";
 import { logEvent } from "../ai/events";
+import { getEnv } from "../env";
+import { pingUnsplashDownload, searchUnsplash } from "../agent/unsplash";
 import {
   buildHerbModerationPrompt,
   buildRemedyModerationPrompt,
@@ -43,6 +45,25 @@ function isEmpty(v: unknown): boolean {
   if (typeof v === "string") return v.trim().length === 0;
   if (Array.isArray(v)) return v.length === 0;
   return false;
+}
+
+/**
+ * Fetch a licensed stock photo for the record. Returns null if there's
+ * no UNSPLASH_ACCESS_KEY, the search returns nothing, or the request
+ * errors — image is a nice-to-have, never a blocker.
+ */
+async function fetchStockImage(query: string): Promise<string | null> {
+  const env = getEnv();
+  if (!env.UNSPLASH_ACCESS_KEY) return null;
+  try {
+    const img = await searchUnsplash(env.UNSPLASH_ACCESS_KEY, query);
+    if (!img) return null;
+    // Per Unsplash licence: ping the download endpoint when we use it.
+    await pingUnsplashDownload(env.UNSPLASH_ACCESS_KEY, img.download_location);
+    return img.url;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -127,7 +148,19 @@ regenerateRoutes.post("/remedy/:id", async (c) => {
       outputTokens: result.usage.output_tokens,
     });
 
-    const patch = fillMissing(row as unknown as Record<string, unknown>, verdict.draft as unknown as Record<string, unknown>);
+    // Fetch a stock image if the record doesn't already have one.
+    // Unsplash's licence requires a per-use download ping, which the
+    // helper handles for us.
+    let fetchedImage: string | null = null;
+    if (isEmpty(row.image_url)) {
+      fetchedImage = await fetchStockImage(`${row.primary_herb_name} herbal tea plant`);
+    }
+    const draftWithImage: Record<string, unknown> = {
+      ...(verdict.draft as unknown as Record<string, unknown>),
+    };
+    if (fetchedImage) draftWithImage.image_url = fetchedImage;
+
+    const patch = fillMissing(row as unknown as Record<string, unknown>, draftWithImage);
     if (Object.keys(patch).length > 0) {
       const updates: Record<string, unknown> = { ...patch, updated_date: sql`now()` };
       await db
@@ -223,7 +256,16 @@ regenerateRoutes.post("/herb/:id", async (c) => {
       outputTokens: result.usage.output_tokens,
     });
 
-    const patch = fillMissing(row as unknown as Record<string, unknown>, verdict.draft as unknown as Record<string, unknown>);
+    let fetchedImage: string | null = null;
+    if (isEmpty(row.image_url)) {
+      fetchedImage = await fetchStockImage(`${row.common_name} ${row.botanical_name ?? ""} plant leaves herb`);
+    }
+    const draftWithImage: Record<string, unknown> = {
+      ...(verdict.draft as unknown as Record<string, unknown>),
+    };
+    if (fetchedImage) draftWithImage.image_url = fetchedImage;
+
+    const patch = fillMissing(row as unknown as Record<string, unknown>, draftWithImage);
     if (Object.keys(patch).length > 0) {
       const updates: Record<string, unknown> = { ...patch, updated_date: sql`now()` };
       await db
