@@ -73,6 +73,8 @@ export type AgentRunOptions = {
   forceResearch?: boolean;
   skipResearch?: boolean;
   dryRun?: boolean;
+  /** Submit but skip auto-publish — the entry lands in the admin queue. */
+  draftOnly?: boolean;
 };
 
 export type PerPostResult = {
@@ -302,7 +304,10 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
     };
   }
 
-  const path = plan.kind === "herb" ? "/api/submissions/herb" : "/api/submissions/remedy";
+  const basePath = plan.kind === "herb" ? "/api/submissions/herb" : "/api/submissions/remedy";
+  const path = (opts.draftOnly ? `${basePath}?draft=1` : basePath) as
+    | "/api/submissions/herb"
+    | "/api/submissions/remedy";
   const res = await opts.submit(path, body);
   if (!res.ok) {
     return {

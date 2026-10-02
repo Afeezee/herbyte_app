@@ -8,9 +8,10 @@
  * --endpoint=http://localhost:3000.
  *
  * Usage:
- *   npm run agent                       # one post, respects daily cap
+ *   npm run agent                       # one post, auto-publishes if AI approves
  *   npm run agent -- --n=3              # up to 3 posts (still daily-capped)
- *   npm run agent -- --dry-run          # draft without submitting
+ *   npm run agent -- --dry-run          # draft locally without submitting
+ *   npm run agent -- --draft            # submit but SKIP auto-publish, land in admin queue
  *   npm run agent -- --kind=remedy
  *   npm run agent -- --force-research
  *   npm run agent -- --endpoint=http://localhost:3000
@@ -22,6 +23,7 @@ import { getEnv } from "../server/env";
 type Cli = {
   n: number;
   dryRun: boolean;
+  draftOnly: boolean;
   kind: "herb" | "remedy" | null;
   forceResearch: boolean;
   skipResearch: boolean;
@@ -33,6 +35,7 @@ function parseCli(): Cli {
   const o: Cli = {
     n: 1,
     dryRun: false,
+    draftOnly: false,
     kind: null,
     forceResearch: false,
     skipResearch: false,
@@ -43,6 +46,7 @@ function parseCli(): Cli {
   };
   for (const a of args) {
     if (a === "--dry-run") o.dryRun = true;
+    else if (a === "--draft") o.draftOnly = true;
     else if (a === "--force-research") o.forceResearch = true;
     else if (a === "--skip-research") o.skipResearch = true;
     else if (a === "--kind=herb" || a === "--kind=remedy") o.kind = a.split("=")[1] as "herb" | "remedy";
@@ -94,6 +98,7 @@ async function main(): Promise<number> {
     forceResearch: cli.forceResearch,
     skipResearch: cli.skipResearch,
     dryRun: cli.dryRun,
+    draftOnly: cli.draftOnly,
   });
 
   console.log(`\nendpoint:    ${endpoint}`);

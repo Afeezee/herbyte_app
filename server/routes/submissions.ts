@@ -152,6 +152,9 @@ function autoPublishEligible(moderationStatus: string | null | undefined, risk: 
 submissionRoutes.post("/remedy", async (c) => {
   const user = c.get("user");
   const isAgent = !!c.req.header("x-agent-service-token");
+  // `?draft=1` opts out of auto-publish for THIS submission regardless
+  // of the AI verdict — the row lands in the admin queue for review.
+  const isDraft = c.req.query("draft") === "1";
   const body = await c.req.json().catch(() => ({}));
   const parsed = remedySubmissionInputSchema.safeParse(body);
   if (!parsed.success) {
@@ -247,6 +250,11 @@ submissionRoutes.post("/remedy", async (c) => {
       verdict.draft.research_references,
       searchOutcome.results,
     );
+    // Carry the submitter's image_url into the enriched draft so it
+    // survives into the published remedy row.
+    if (input.image_url && !verdict.draft.image_url) {
+      verdict.draft.image_url = input.image_url;
+    }
   } catch (err) {
     errorCode =
       err instanceof GroqError ? err.code : err instanceof z.ZodError ? "invalid_json" : "internal";
@@ -284,9 +292,15 @@ submissionRoutes.post("/remedy", async (c) => {
     .returning()) as unknown as Array<{ id: string }>;
 
   // Auto-publish branch: skip the admin wait when the AI is confident
-  // and risk is bounded.
+  // and risk is bounded. `?draft=1` opts THIS submission out of
+  // auto-publish regardless of the AI verdict so the admin can review.
   let publishedId: string | null = null;
-  if (saved?.id && verdict && autoPublishEligible(verdict.moderation_status, verdict.risk_level)) {
+  if (
+    !isDraft &&
+    saved?.id &&
+    verdict &&
+    autoPublishEligible(verdict.moderation_status, verdict.risk_level)
+  ) {
     try {
       // Re-fetch the row we just wrote so publish helper gets the full shape.
       const [subRow] = await db
@@ -345,6 +359,7 @@ submissionRoutes.post("/remedy", async (c) => {
 submissionRoutes.post("/herb", async (c) => {
   const user = c.get("user");
   const isAgent = !!c.req.header("x-agent-service-token");
+  const isDraft = c.req.query("draft") === "1";
   const body = await c.req.json().catch(() => ({}));
   const parsed = herbSubmissionInputSchema.safeParse(body);
   if (!parsed.success) {
@@ -432,6 +447,9 @@ submissionRoutes.post("/herb", async (c) => {
       verdict.draft.research_references,
       searchOutcome.results,
     );
+    if (input.image_url && !verdict.draft.image_url) {
+      verdict.draft.image_url = input.image_url;
+    }
   } catch (err) {
     errorCode =
       err instanceof GroqError ? err.code : err instanceof z.ZodError ? "invalid_json" : "internal";
@@ -466,7 +484,12 @@ submissionRoutes.post("/herb", async (c) => {
     .returning()) as unknown as Array<{ id: string }>;
 
   let publishedId: string | null = null;
-  if (saved?.id && verdict && autoPublishEligible(verdict.moderation_status, verdict.risk_level)) {
+  if (
+    !isDraft &&
+    saved?.id &&
+    verdict &&
+    autoPublishEligible(verdict.moderation_status, verdict.risk_level)
+  ) {
     try {
       const [subRow] = await db
         .select()

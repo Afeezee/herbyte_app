@@ -102,6 +102,9 @@ export const remedyModerationOutputSchema = z.object({
     category: z.enum(categories).catch("Other"),
     region: z.enum(regions).catch("Global"),
     research_references: z.array(referenceSchema).catch([]),
+    // Not emitted by the model — populated server-side from the
+    // submitter's image_url so it survives into the published row.
+    image_url: z.string().url().optional(),
   }),
 });
 
@@ -197,6 +200,9 @@ export const herbModerationOutputSchema = z.object({
     major_compounds: z.array(z.string()).catch([]),
     research_references: z.array(referenceSchema).catch([]),
     safety_rating: z.enum(safetyRatings).catch("Use with Caution"),
+    // Not emitted by the model — populated server-side from the
+    // submitter's image_url so it survives into the published row.
+    image_url: z.string().url().optional(),
   }),
 });
 
