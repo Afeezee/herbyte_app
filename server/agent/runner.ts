@@ -106,10 +106,11 @@ export type AgentRunReport = {
 // Driver — runs up to `n` posts, respecting the DB-backed daily cap.
 // ---------------------------------------------------------------------------
 
-// Max concurrent runOne() invocations per batch. Groq free-tier RPM
-// is 25-30, so 4 in-flight stays well under while letting a cron
-// finish 12 posts inside the 60s Hobby function cap.
-const BATCH_CONCURRENCY = 4;
+// Max concurrent runOne() invocations per batch. Each post actually
+// makes TWO Groq calls (one agent draft + one server moderation), so
+// 2 in-flight ≈ 4 Groq calls at once. Groq free-tier TPM is 8000 and
+// each call uses ~2000 tokens, so 2 is the ceiling before 429s.
+const BATCH_CONCURRENCY = 2;
 
 export async function runAgentBatch(n: number, opts: AgentRunOptions): Promise<AgentRunReport> {
   const env = getEnv();

@@ -112,6 +112,47 @@ async function callOnce({
  * Strip <think>…</think> reasoning blocks and ```json fences``` around the
  * payload; return the first {...} block otherwise, else the raw content.
  */
+/**
+ * Groq's 429 body includes "Please try again in <N>s". Pull the
+ * seconds out so we can wait that long before retrying.
+ */
+function parseRetryAfterSeconds(errMessage: string): number | null {
+  const m = errMessage.match(/try again in ([\d.]+)s/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 20) : null;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Wraps callOnce with a single wait-and-retry on a 429 TPM throttle.
+ * Switching to the fallback model doesn't help because Groq's TPM is
+ * per-organization across models; we have to actually wait.
+ */
+async function callOnceWithRateLimitRetry(opts: {
+  model: string;
+  messages: ChatMessage[];
+  temperature: number;
+  responseJson: boolean;
+  signal?: AbortSignal;
+}): Promise<{ raw: string; usage: { input_tokens: number; output_tokens: number } }> {
+  try {
+    return await callOnce(opts);
+  } catch (err) {
+    if (err instanceof GroqError && err.code === "http_error" && err.status === 429) {
+      const waitSec = parseRetryAfterSeconds(err.message);
+      if (waitSec !== null) {
+        await sleep(Math.ceil(waitSec * 1000) + 250);
+        return await callOnce(opts);
+      }
+    }
+    throw err;
+  }
+}
+
 export function extractJson(raw: string): string {
   let s = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -154,8 +195,11 @@ export async function chatJson<T>({
   try {
     for (const model of models) {
       try {
-        // First attempt.
-        let attempt = await callOnce({
+        // First attempt — with one wait-and-retry on 429 TPM throttle.
+        // The error body includes "Please try again in <N>s"; parse and
+        // sleep, THEN retry the same model (fallback hits the same org
+        // TPM bucket, so switching models wouldn't help).
+        let attempt = await callOnceWithRateLimitRetry({
           model,
           messages,
           temperature,
@@ -195,7 +239,7 @@ export async function chatJson<T>({
                   `and ensure every required field is present and every enum uses an allowed value.`,
               },
             ];
-            attempt = await callOnce({
+            attempt = await callOnceWithRateLimitRetry({
               model,
               messages: repairMessages,
               temperature,
