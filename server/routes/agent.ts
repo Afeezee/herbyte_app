@@ -21,7 +21,10 @@ import type { Hono as HonoApp } from "hono";
 export function makeAgentCronRoutes(appFetch: HonoApp["fetch"]) {
   const r = new Hono();
 
-  r.post("/run-agent", async (c) => {
+  // Vercel Cron always fires GET requests (not configurable), so the
+  // same handler is exposed for GET and POST — GET for the scheduler,
+  // POST for manual curl / local testing.
+  r.on(["GET", "POST"], "/run-agent", async (c) => {
     const env = getEnv();
     if (!env.CRON_SECRET) {
       throw new HTTPException(500, { message: "CRON_SECRET not configured" });
