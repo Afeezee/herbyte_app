@@ -26,11 +26,11 @@
   "crons": [
     {
       "path": "/api/cron/run-agent?n=12",
-      "schedule": "30 8 * * *"
+      "schedule": "0 9 * * *"
     },
     {
       "path": "/api/cron/run-agent?n=12",
-      "schedule": "30 20 * * *"
+      "schedule": "0 21 * * *"
     }
   ]
 }
