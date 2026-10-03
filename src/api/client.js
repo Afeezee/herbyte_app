@@ -178,6 +178,20 @@ const regenerate = {
     }),
 }
 
+// Agent runs — admin-only on-demand trigger. Options:
+//   n:         1..12
+//   kind:      'random' | 'herb' | 'remedy'
+//   research:  'random' | 'force' | 'skip'
+//   draftOnly: boolean (submit but skip auto-publish, land in queue)
+//   dryRun:    boolean (don't submit, just show what would happen)
+const agent = {
+  run: (opts) =>
+    request('/agent/run', {
+      method: 'POST',
+      body: opts ?? {},
+    }),
+}
+
 // ---------------------------------------------------------------------------
 // Uploads + email — the legacy SDK exposed these under
 // `integrations.Core.*`; we keep that path so the small number of
@@ -220,6 +234,7 @@ export const api = {
   ai,
   submissions,
   regenerate,
+  agent,
   integrations,
   // Convenience aliases so pages don't have to reach into integrations.Core.
   UploadFile,

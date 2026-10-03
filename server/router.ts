@@ -9,7 +9,7 @@ import { aiRoutes } from "./routes/ai";
 import { submissionRoutes } from "./routes/submissions";
 import { uploadRoutes } from "./routes/upload";
 import { contactRoutes } from "./routes/contact";
-import { makeAgentCronRoutes } from "./routes/agent";
+import { makeAgentAdminRoutes, makeAgentCronRoutes } from "./routes/agent";
 import { regenerateRoutes } from "./routes/regenerate";
 
 // -----------------------------------------------------------------------------
@@ -54,6 +54,7 @@ app.use("/api/upload", authMiddleware);
 app.use("/api/ai/*", authMiddleware);
 app.use("/api/submissions/*", authMiddleware);
 app.use("/api/regenerate/*", authMiddleware);
+app.use("/api/agent/*", authMiddleware);
 
 async function authMiddleware(
   c: Context<{ Variables: Variables }>,
@@ -103,10 +104,11 @@ app.route("/api/regenerate", regenerateRoutes);
 app.route("/api/upload", uploadRoutes);
 app.route("/api/contact", contactRoutes);
 
-// Cron: content agent — hit twice a day by Vercel Cron (see vercel.json).
-// Takes `?n=6` to post 6 submissions per invocation, giving 12/day with
-// two crons. app.fetch is passed in so submission POSTs stay in-process.
+// Cron: content agent — hit by Vercel Cron (see vercel.json), auth
+// by CRON_SECRET. Admin dashboard trigger lives at /api/agent/run.
+// Both pass app.fetch so submission POSTs stay in-process.
 app.route("/api/cron", makeAgentCronRoutes(app.fetch.bind(app)));
+app.route("/api/agent", makeAgentAdminRoutes(app.fetch.bind(app)));
 
 // -----------------------------------------------------------------------------
 // 404 + error handler — the SDK expects `{error: {code, message}}`.

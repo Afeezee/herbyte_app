@@ -15,7 +15,7 @@ import { usePageMeta } from "@/lib/usePageMeta";
 import {
   Shield, Users, Leaf, Beaker, Package, Calendar, MessageCircle,
   TrendingUp, Eye, Heart, Trash2, CheckCircle, XCircle, Clock,
-  Search, AlertTriangle, Store
+  Search, AlertTriangle, Store, Sparkles, Zap, Globe, SearchCode, FlaskConical
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
@@ -404,7 +404,11 @@ export default function AdminDashboard() {
 
         {/* Management Tabs */}
         <Tabs defaultValue="submissions" className="space-y-6">
-          <TabsList className="grid grid-cols-4 md:grid-cols-8 bg-white border">
+          <TabsList className="grid grid-cols-3 md:grid-cols-9 bg-white border">
+            <TabsTrigger value="agent">
+              <Sparkles className="w-4 h-4 mr-1 inline" />
+              Agent
+            </TabsTrigger>
             <TabsTrigger value="submissions">
               Submissions
               {(herbSubmissions.filter(s => s.moderation_status !== 'Rejected' && !s.published_herb_id).length +
@@ -423,6 +427,11 @@ export default function AdminDashboard() {
             <TabsTrigger value="sellers">Sellers</TabsTrigger>
             <TabsTrigger value="comments">Comments</TabsTrigger>
           </TabsList>
+
+          {/* Agent Tab */}
+          <TabsContent value="agent">
+            <AgentPanel />
+          </TabsContent>
 
           {/* Submissions Tab */}
           <TabsContent value="submissions">
@@ -1096,6 +1105,273 @@ function KVList({ label, items }) {
       <ul className="list-disc pl-5 text-gray-800">
         {items.map((it, i) => <li key={i}>{it}</li>)}
       </ul>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AgentPanel — admin trigger for the content agent. Thin UI over the
+// POST /api/agent/run endpoint; mirrors the npm run agent CLI flags.
+// ---------------------------------------------------------------------------
+
+function AgentPanel() {
+  const queryClient = useQueryClient();
+  const [n, setN] = useState(1);
+  const [kind, setKind] = useState("random");         // 'random' | 'herb' | 'remedy'
+  const [research, setResearch] = useState("random"); // 'random' | 'force' | 'skip'
+  const [draftOnly, setDraftOnly] = useState(false);
+  const [dryRun, setDryRun] = useState(false);
+  const [lastReport, setLastReport] = useState(null);
+
+  const runMutation = useMutation({
+    mutationFn: () => api.agent.run({ n, kind, research, draftOnly, dryRun }),
+    onSuccess: (report) => {
+      setLastReport(report);
+      queryClient.invalidateQueries({ queryKey: ['admin-herbs'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-remedies'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-herb-submissions'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-remedy-submissions'] });
+    },
+    onError: (err) => alert(`Agent run failed: ${err?.message ?? 'unknown error'}`),
+  });
+
+  const nValues = [1, 2, 3, 4, 5, 6, 8, 10, 12];
+  const estSeconds = n * 10; // rough per-post estimate on free tier
+
+  return (
+    <div className="space-y-6">
+      <Alert className="bg-emerald-50 border-emerald-200">
+        <Sparkles className="w-4 h-4 text-emerald-700" />
+        <AlertDescription className="text-emerald-900">
+          <strong>On-demand agent run.</strong> Generates herb or remedy entries,
+          moderates them through Groq + Serper + Unsplash, and auto-publishes any
+          with verified web citations. Mirrors the scheduled cron — same pipeline,
+          same daily cap. Rejected attempts (no evidence found) don't count.
+        </AlertDescription>
+      </Alert>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Controls */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-xl text-[#2D5016] flex items-center gap-2">
+              <Zap className="w-5 h-5" />
+              Run the agent
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* n */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700">How many entries</label>
+                <span className="text-xs text-gray-500">≈ {estSeconds}s on free tier (60s cap)</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {nValues.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setN(v)}
+                    className={`px-3 py-1.5 rounded-md text-sm border transition ${
+                      n === v
+                        ? "bg-[#4A7C2E] text-white border-[#4A7C2E]"
+                        : "bg-white text-gray-700 border-gray-300 hover:border-[#4A7C2E] hover:text-[#4A7C2E]"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              {n > 4 && (
+                <p className="text-xs text-amber-700 mt-2">
+                  ⚠ Free-tier Groq TPM (8000) + Vercel Hobby 60s function cap mean
+                  n above 4 may time out before all finish.
+                </p>
+              )}
+            </div>
+
+            {/* Kind */}
+            <div>
+              <label className="text-sm font-semibold text-gray-700 mb-2 block">What to generate</label>
+              <div className="grid grid-cols-3 gap-2">
+                <KindButton active={kind === "random"} onClick={() => setKind("random")} icon={<Sparkles className="w-4 h-4" />} label="Random" sub="60% remedy / 40% herb" />
+                <KindButton active={kind === "remedy"} onClick={() => setKind("remedy")} icon={<FlaskConical className="w-4 h-4" />} label="Remedy" sub="Only remedies" />
+                <KindButton active={kind === "herb"} onClick={() => setKind("herb")} icon={<Leaf className="w-4 h-4" />} label="Herb" sub="Only herbs" />
+              </div>
+            </div>
+
+            {/* Research */}
+            <div>
+              <label className="text-sm font-semibold text-gray-700 mb-2 block">Web research</label>
+              <div className="grid grid-cols-3 gap-2">
+                <KindButton active={research === "random"} onClick={() => setResearch("random")} icon={<Sparkles className="w-4 h-4" />} label="Random" sub="~50% of runs" />
+                <KindButton active={research === "force"} onClick={() => setResearch("force")} icon={<Globe className="w-4 h-4" />} label="Force" sub="Always Serper-ground" />
+                <KindButton active={research === "skip"} onClick={() => setResearch("skip")} icon={<SearchCode className="w-4 h-4" />} label="Skip" sub="LLM knowledge only" />
+              </div>
+            </div>
+
+            {/* Toggles */}
+            <div className="grid sm:grid-cols-2 gap-3">
+              <ToggleRow
+                checked={draftOnly}
+                onChange={setDraftOnly}
+                label="Draft only"
+                sub="Submit but skip auto-publish — land in the review queue for me to approve."
+              />
+              <ToggleRow
+                checked={dryRun}
+                onChange={setDryRun}
+                label="Dry run"
+                sub="Draft the entry and print what would happen, but don't submit."
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                size="lg"
+                className="bg-[#4A7C2E] hover:bg-[#2D5016] text-white"
+                onClick={() => runMutation.mutate()}
+                disabled={runMutation.isPending}
+              >
+                {runMutation.isPending
+                  ? <><Clock className="w-4 h-4 mr-2 animate-spin" /> Running…</>
+                  : <><Zap className="w-4 h-4 mr-2" /> Run agent</>}
+              </Button>
+              {runMutation.isPending && (
+                <p className="text-sm text-gray-500 self-center">Expected ~{estSeconds}s</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Status summary (compact) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl text-[#2D5016]">Status</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {lastReport ? (
+              <>
+                <StatusLine label="Attempted"  value={lastReport.attempted} />
+                <StatusLine label="Published"  value={lastReport.posted} color="text-emerald-700" />
+                <StatusLine label="Today / cap" value={`${lastReport.todayAfter} / ${lastReport.dailyCap}`} />
+                {lastReport.skippedReason && (
+                  <div className="pt-2 border-t">
+                    <span className="text-amber-700">Skipped: {lastReport.skippedReason.replace(/_/g, ' ')}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-gray-500">No run yet. Hit Run to see results here.</p>
+            )}
+            <div className="pt-3 border-t text-xs text-gray-500">
+              Daily cap counts <strong>successful</strong> publishes only. Rejected
+              submissions (no verified citations) don't eat into the quota.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Per-result table */}
+      {lastReport?.results?.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg text-[#2D5016]">
+              Last run — {lastReport.results.length} attempt{lastReport.results.length === 1 ? "" : "s"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {lastReport.results.map((r, i) => (
+                <ResultRow key={i} r={r} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function KindButton({ active, onClick, icon, label, sub }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`p-3 rounded-md border text-left transition ${
+        active
+          ? "bg-emerald-50 border-emerald-500 ring-2 ring-emerald-200"
+          : "bg-white border-gray-300 hover:border-emerald-400"
+      }`}
+    >
+      <div className={`flex items-center gap-2 font-medium ${active ? "text-emerald-900" : "text-gray-800"}`}>
+        {icon}
+        {label}
+      </div>
+      <div className="text-xs text-gray-500 mt-1">{sub}</div>
+    </button>
+  );
+}
+
+function ToggleRow({ checked, onChange, label, sub }) {
+  return (
+    <label className={`block p-3 rounded-md border cursor-pointer transition ${
+      checked ? "bg-emerald-50 border-emerald-500" : "bg-white border-gray-300 hover:border-emerald-400"
+    }`}>
+      <div className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="mt-1"
+        />
+        <div>
+          <div className={`font-medium ${checked ? "text-emerald-900" : "text-gray-800"}`}>{label}</div>
+          <div className="text-xs text-gray-600 mt-1">{sub}</div>
+        </div>
+      </div>
+    </label>
+  );
+}
+
+function StatusLine({ label, value, color = "text-gray-800" }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-gray-600">{label}</span>
+      <span className={`font-mono text-lg font-semibold ${color}`}>{value}</span>
+    </div>
+  );
+}
+
+function ResultRow({ r }) {
+  let mark = "·";
+  let colour = "text-gray-500";
+  let outcome = r.moderation_status ?? r.error ?? "no result";
+  if (r.auto_published) { mark = "✓"; colour = "text-emerald-700"; outcome = `${r.moderation_status} • PUBLISHED`; }
+  else if (r.moderation_status === "Rejected") { mark = "✗"; colour = "text-red-700"; outcome = "Rejected (no evidence) — not counted"; }
+  else if (!r.ok) { mark = "⚠"; colour = "text-amber-700"; }
+  return (
+    <div className="flex items-start gap-3 py-2 border-b last:border-b-0">
+      <span className={`text-xl font-mono w-6 shrink-0 ${colour}`}>{mark}</span>
+      {r.image_url && (
+        <img src={r.image_url} alt={r.display_name ?? ""} className="w-14 h-14 object-cover rounded shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className="text-xs capitalize">{r.kind}</Badge>
+          <strong className="truncate text-gray-900">{r.display_name ?? "(no draft)"}</strong>
+        </div>
+        <div className="text-xs text-gray-500 mt-1">
+          {r.category && <>{r.category} · </>}
+          {r.region && <>{r.region} · </>}
+          {r.generation_method && <>{r.generation_method}</>}
+        </div>
+        <div className={`text-sm mt-1 ${colour}`}>{outcome}</div>
+        {r.error && <div className="text-xs text-red-600 mt-1 font-mono break-all">{r.error}</div>}
+        {r.published_id && (
+          <div className="text-xs text-gray-400 mt-1 font-mono">id: {r.published_id}</div>
+        )}
+      </div>
     </div>
   );
 }
