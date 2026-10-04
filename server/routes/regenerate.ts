@@ -21,7 +21,7 @@ import { chatJson, estimateChatTokens } from "../ai/groq";
 import { search, filterCitedReferences } from "../ai/search";
 import { logEvent } from "../ai/events";
 import { getEnv } from "../env";
-import { pingUnsplashDownload, searchUnsplash } from "../agent/unsplash";
+import { buildHerbImageQuery, pingUnsplashDownload, searchUnsplash } from "../agent/unsplash";
 import {
   buildHerbModerationPrompt,
   buildRemedyModerationPrompt,
@@ -176,11 +176,17 @@ regenerateRoutes.post("/remedy/:id", async (c) => {
     });
 
     // Fetch a stock image if the record doesn't already have one.
-    // Unsplash's licence requires a per-use download ping, which the
-    // helper handles for us.
+    // Query is anchored on botanical / plant imagery (not teacup
+    // photos) and includes up to 2 companion herbs so composite shots
+    // like "ginger cinnamon" come up naturally.
     let fetchedImage: string | null = null;
     if (isEmpty(row.image_url)) {
-      fetchedImage = await fetchStockImage(`${row.primary_herb_name} herbal tea plant`);
+      fetchedImage = await fetchStockImage(
+        buildHerbImageQuery({
+          primary: row.primary_herb_name,
+          companions: row.herbs_used,
+        }),
+      );
     }
     const draftWithImage: Record<string, unknown> = {
       ...(verdict.draft as unknown as Record<string, unknown>),
@@ -297,7 +303,12 @@ regenerateRoutes.post("/herb/:id", async (c) => {
 
     let fetchedImage: string | null = null;
     if (isEmpty(row.image_url)) {
-      fetchedImage = await fetchStockImage(`${row.common_name} ${row.botanical_name ?? ""} plant leaves herb`);
+      fetchedImage = await fetchStockImage(
+        buildHerbImageQuery({
+          primary: row.common_name,
+          botanical: row.botanical_name,
+        }),
+      );
     }
     const draftWithImage: Record<string, unknown> = {
       ...(verdict.draft as unknown as Record<string, unknown>),
