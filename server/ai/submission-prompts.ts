@@ -174,8 +174,27 @@ MANDATORY output fields (must not be empty):
 - draft.research_references — if <search_results> has entries, cite AT LEAST ONE whose url matches a search_results url exactly. If <search_results> is empty, return an empty array.
 
 ENUM VALUES must be returned EXACTLY — case, spaces, punctuation:
-- draft.safety_rating: one of "Generally Safe" | "Use with Caution" | "High Risk - Expert Guidance Required". Pick "Generally Safe" for well-established herbs with no major contraindications (e.g. ginger, chamomile at culinary doses). Only use "Use with Caution" when there is a real documented interaction or risk group to warn about. Reserve "High Risk - Expert Guidance Required" for herbs that need practitioner supervision.
-- risk_level: "Low" | "Moderate" | "High" | "Critical".
+- draft.safety_rating: one of "Generally Safe" | "Use with Caution" | "High Risk - Expert Guidance Required".
+  Default to **"Generally Safe"** whenever the remedy's herbs are
+  well-established culinary / dietary ingredients used at normal
+  food-grade doses (chamomile, ginger, peppermint, spearmint, lemon
+  balm, hibiscus, rooibos, rose hip, rosemary, thyme, oregano, basil,
+  tulsi, moringa leaf, turmeric, cardamom, ceylon cinnamon, fennel,
+  dandelion leaf, nettle, hawthorn berry, elderberry cooked, lemon,
+  garlic, parsley, dill, lemongrass, lemon verbena, lavender, rose,
+  olive leaf, burdock, raspberry leaf, mint, green/black tea). Being
+  comparable to common food is the standard — coffee has
+  side-effects too and we don't label it "Use with Caution".
+  Only pick **"Use with Caution"** when there is a NAMED, specific
+  reason (a documented drug interaction, a group that shouldn't use
+  it like pregnancy or anticoagulant users, a known risk at normal
+  doses) — not generic "may interact with medications" boilerplate.
+  Reserve **"High Risk - Expert Guidance Required"** for herbs that
+  truly need practitioner supervision at normal doses (ephedra,
+  foxglove, pennyroyal oil, aconite, comfrey internal, kava
+  long-term, chaparral, mistletoe).
+- risk_level: "Low" | "Moderate" | "High" | "Critical". Follow the
+  same logic — "Low" is the default for food-grade herbs.
 
 <user_input>Submitted remedy:
 - Name: ${wrapUserInput(input.name)}
@@ -280,8 +299,25 @@ MANDATORY output fields (must not be empty):
 - draft.health_benefits — at least one { benefit, evidence_level } entry.
 
 ENUM VALUES must be returned EXACTLY — case, spaces, punctuation:
-- draft.safety_rating: one of "Generally Safe" | "Use with Caution" | "High Risk - Expert Guidance Required". Pick "Generally Safe" for well-established culinary herbs with no major contraindications. Only use "Use with Caution" when there is a real documented interaction or risk group. Reserve "High Risk - Expert Guidance Required" for herbs that need practitioner supervision.
-- risk_level: "Low" | "Moderate" | "High" | "Critical".
+- draft.safety_rating: one of "Generally Safe" | "Use with Caution" | "High Risk - Expert Guidance Required".
+  Default to **"Generally Safe"** when the herb is a well-established
+  culinary / dietary ingredient used at food-grade doses (chamomile,
+  ginger, peppermint, spearmint, lemon balm, hibiscus, rooibos, rose
+  hip, rosemary, thyme, oregano, basil, tulsi, moringa leaf, turmeric,
+  cardamom, ceylon cinnamon, fennel, dandelion leaf, nettle, hawthorn
+  berry, elderberry cooked, lemon, garlic, parsley, dill, lemongrass,
+  lemon verbena, lavender, rose, olive leaf, burdock, raspberry leaf,
+  mint, green/black tea). Comparable-to-common-food is the standard —
+  coffee has side-effects too and we don't label it Use with Caution.
+  Only pick **"Use with Caution"** when there is a NAMED specific
+  reason (documented drug interaction, pregnancy/breastfeeding caveat,
+  known risk group) — not generic boilerplate.
+  Reserve **"High Risk - Expert Guidance Required"** for herbs that
+  truly need practitioner supervision at normal doses (ephedra,
+  foxglove, pennyroyal oil, aconite, comfrey internal, kava long-term,
+  chaparral, mistletoe).
+- risk_level: "Low" | "Moderate" | "High" | "Critical". Same logic —
+  "Low" is the default for food-grade herbs.
 
 <user_input>Submitted herb:
 - Common name: ${wrapUserInput(input.common_name)}
