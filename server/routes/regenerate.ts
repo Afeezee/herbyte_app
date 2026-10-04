@@ -21,7 +21,7 @@ import { chatJson, estimateChatTokens } from "../ai/groq";
 import { search, filterCitedReferences } from "../ai/search";
 import { logEvent } from "../ai/events";
 import { getEnv } from "../env";
-import { buildHerbImageQuery, pingUnsplashDownload, searchUnsplash } from "../agent/unsplash";
+import { buildHerbImageQueries, pingUnsplashDownload, searchUnsplashCascade } from "../agent/unsplash";
 import {
   buildHerbModerationPrompt,
   buildRemedyModerationPrompt,
@@ -48,19 +48,19 @@ function isEmpty(v: unknown): boolean {
 }
 
 /**
- * Fetch a licensed stock photo for the record. Returns null if there's
- * no UNSPLASH_ACCESS_KEY, the search returns nothing, or the request
- * errors — image is a nice-to-have, never a blocker.
+ * Fetch a licensed stock photo via a cascade of queries (specific →
+ * generic). Returns null if there's no UNSPLASH_ACCESS_KEY, all
+ * queries came back empty, or the request errored — image is a
+ * nice-to-have, never a blocker.
  */
-async function fetchStockImage(query: string): Promise<string | null> {
+async function fetchStockImage(queries: string[]): Promise<string | null> {
   const env = getEnv();
   if (!env.UNSPLASH_ACCESS_KEY) return null;
   try {
-    const img = await searchUnsplash(env.UNSPLASH_ACCESS_KEY, query);
-    if (!img) return null;
-    // Per Unsplash licence: ping the download endpoint when we use it.
-    await pingUnsplashDownload(env.UNSPLASH_ACCESS_KEY, img.download_location);
-    return img.url;
+    const match = await searchUnsplashCascade(env.UNSPLASH_ACCESS_KEY, queries);
+    if (!match) return null;
+    await pingUnsplashDownload(env.UNSPLASH_ACCESS_KEY, match.image.download_location);
+    return match.image.url;
   } catch {
     return null;
   }
@@ -176,13 +176,12 @@ regenerateRoutes.post("/remedy/:id", async (c) => {
     });
 
     // Fetch a stock image if the record doesn't already have one.
-    // Query is anchored on botanical / plant imagery (not teacup
-    // photos) and includes up to 2 companion herbs so composite shots
-    // like "ginger cinnamon" come up naturally.
+    // Cascade of plant-anchored queries so we always try the most
+    // specific first and fall back to simpler ones.
     let fetchedImage: string | null = null;
     if (isEmpty(row.image_url)) {
       fetchedImage = await fetchStockImage(
-        buildHerbImageQuery({
+        buildHerbImageQueries({
           primary: row.primary_herb_name,
           companions: row.herbs_used,
         }),
@@ -304,7 +303,7 @@ regenerateRoutes.post("/herb/:id", async (c) => {
     let fetchedImage: string | null = null;
     if (isEmpty(row.image_url)) {
       fetchedImage = await fetchStockImage(
-        buildHerbImageQuery({
+        buildHerbImageQueries({
           primary: row.common_name,
           botanical: row.botanical_name,
         }),

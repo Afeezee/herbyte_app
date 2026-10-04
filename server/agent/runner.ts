@@ -19,7 +19,7 @@ import {
   readDbSnapshot,
 } from "./diversity";
 import { buildHerbChoicePrompt, buildRemedyChoicePrompt } from "./prompts";
-import { buildHerbImageQuery, pingUnsplashDownload, searchUnsplash, type UnsplashImage } from "./unsplash";
+import { buildHerbImageQueries, pingUnsplashDownload, searchUnsplashCascade, type UnsplashImage } from "./unsplash";
 
 // ---------------------------------------------------------------------------
 // Lightweight schemas for the agent's own generation call. The real
@@ -283,25 +283,30 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
   const displayName =
     "common_name" in choice ? choice.common_name : (choice as RemedyChoice).name;
 
-  // Stock image — plant/botanical imagery only, never prepared-drink
-  // photos. Uses the botanical name when available so common names like
-  // "kola" don't surface soft-drink shots.
+  // Stock image — plant imagery only, never prepared-drink photos.
+  // Cascade of short common-name queries (primary + 1 companion for
+  // remedies, then primary + 'plant' / 'leaves' / 'herb', then primary
+  // alone) so we always try the most specific first and fall back if
+  // Unsplash returns nothing.
   let image: UnsplashImage | null = null;
   if (env.UNSPLASH_ACCESS_KEY) {
     try {
-      const q =
+      const queries =
         plan.kind === "herb"
-          ? buildHerbImageQuery({
+          ? buildHerbImageQueries({
               primary: (choice as HerbChoice).common_name,
               botanical: (choice as HerbChoice).botanical_name,
             })
-          : buildHerbImageQuery({
+          : buildHerbImageQueries({
               primary: (choice as RemedyChoice).primary_herb_name,
               companions: (choice as RemedyChoice).herbs_used,
             });
-      image = await searchUnsplash(env.UNSPLASH_ACCESS_KEY, q);
-      if (image && !opts.dryRun) {
-        await pingUnsplashDownload(env.UNSPLASH_ACCESS_KEY, image.download_location);
+      const match = await searchUnsplashCascade(env.UNSPLASH_ACCESS_KEY, queries);
+      if (match) {
+        image = match.image;
+        if (!opts.dryRun) {
+          await pingUnsplashDownload(env.UNSPLASH_ACCESS_KEY, image.download_location);
+        }
       }
     } catch {
       image = null;

@@ -6,37 +6,49 @@
  */
 
 /**
- * Build an Unsplash search query anchored on BOTANICAL / PLANT imagery.
- * Query construction matters a lot — common names like "kola" return
- * soft-drink photos; "chamomile tea" returns teacup photos. We fix
- * both by:
- *   - prefixing the Latin botanical name when we have one (unambiguous),
- *   - never including "tea" / "drink" / "cup" — they attract prepared-
- *     drink imagery instead of the raw herb,
- *   - adding "botanical medicinal plant leaves" as a trailing anchor,
- *   - for remedies, including up to 2 companion herbs so composite
- *     shots like "ginger cinnamon" surface naturally.
+ * Build a cascade of Unsplash search queries in order of preference.
+ * Short queries (2–3 words) match Unsplash's tag reality much better
+ * than long specific ones — "Cola nitida botanical medicinal plant
+ * leaves" returns zero results because nobody tags photos that way.
+ *
+ * Rules learned the hard way:
+ *   - Common English names, not Latin binomials ("kola nut" not
+ *     "Cola nitida"), because that's what people actually tag.
+ *   - 2–3 words max, otherwise the AND-intersection returns zero.
+ *   - One qualifier (plant / herb / leaves) to disambiguate from
+ *     commercial products (soft drinks, snacks).
+ *   - Never "tea" / "drink" / "cup" — those surface teacup photos.
+ *
+ * Returns an ORDERED list; the caller tries each until one returns
+ * a result. Specific first, generic last so we land as close to the
+ * right thing as Unsplash's library allows.
  */
-export function buildHerbImageQuery(opts: {
+export function buildHerbImageQueries(opts: {
   primary: string;
   botanical?: string | null;
   companions?: string[] | null;
-}): string {
-  const anchor = "botanical medicinal plant leaves";
-  const herbs: string[] = [];
+}): string[] {
   const primary = (opts.primary ?? "").trim();
-  if (primary) herbs.push(primary);
-  for (const c of (opts.companions ?? []).slice(0, 2)) {
-    const name = (c ?? "").trim();
-    if (!name) continue;
-    if (name.toLowerCase() === primary.toLowerCase()) continue;
-    herbs.push(name);
+  const companions = (opts.companions ?? [])
+    .map((c) => (c ?? "").trim())
+    .filter((c) => c && c.toLowerCase() !== primary.toLowerCase());
+  if (!primary) return [];
+
+  const queries: string[] = [];
+  // Most specific: primary + 1 companion + anchor.
+  if (companions.length > 0) {
+    queries.push(`${primary} ${companions[0]} herbs`);
   }
-  const botanical = (opts.botanical ?? "").trim();
-  // Latin binomial first — most unambiguous. "Cola nitida botanical"
-  // never surfaces a soft-drink; "Cola botanical" alone can.
-  const parts = [botanical, herbs.join(" "), anchor].filter(Boolean);
-  return parts.join(" ");
+  // Primary herb with a plant/leaf qualifier — handles the "kola → soft
+  // drink" case by nudging toward botanical imagery.
+  queries.push(`${primary} plant`);
+  queries.push(`${primary} leaves`);
+  queries.push(`${primary} herb`);
+  // Last resort: just the name, so we at least get SOMETHING rather
+  // than nothing.
+  queries.push(primary);
+  // Dedupe while preserving order.
+  return [...new Set(queries)];
 }
 
 export type UnsplashImage = {
@@ -96,6 +108,28 @@ export async function searchUnsplash(
     photo_url: photoUrl,
     download_location: picked.links!.download_location!,
   };
+}
+
+/**
+ * Try each query in order, return the first one that yields an image.
+ * Stops as soon as something matches so we don't burn Unsplash
+ * requests. Returns null if ALL queries came back empty — caller then
+ * leaves image_url blank.
+ */
+export async function searchUnsplashCascade(
+  key: string,
+  queries: string[],
+): Promise<{ image: UnsplashImage; matchedQuery: string } | null> {
+  for (const q of queries) {
+    if (!q || !q.trim()) continue;
+    try {
+      const img = await searchUnsplash(key, q);
+      if (img) return { image: img, matchedQuery: q };
+    } catch {
+      // Any error on one query just moves to the next.
+    }
+  }
+  return null;
 }
 
 /**
