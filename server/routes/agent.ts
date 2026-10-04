@@ -85,12 +85,21 @@ export function makeAgentCronRoutes(appFetch: HonoApp["fetch"]) {
 // Admin trigger (Clerk session + role=admin)
 // ---------------------------------------------------------------------------
 
+const REGIONS = [
+  "Africa", "Asia", "Europe", "North America",
+  "South America", "Australia", "Middle East", "Global",
+] as const;
+
 const adminRunSchema = z.object({
   n: z.number().int().min(1).max(12).default(1),
   kind: z.enum(["random", "herb", "remedy"]).default("random"),
   research: z.enum(["random", "force", "skip"]).default("random"),
   draftOnly: z.boolean().default(false),
   dryRun: z.boolean().default(false),
+  /** Pin a specific herb — forces primary_herb_name (remedy) or common_name (herb). */
+  targetHerb: z.string().trim().max(120).optional(),
+  /** Pin a specific region — overrides diversity pick. */
+  targetRegion: z.enum(REGIONS).optional(),
 });
 
 function requireAdmin(c: Context<{ Variables: Variables }>) {
@@ -131,6 +140,8 @@ export function makeAgentAdminRoutes(appFetch: HonoApp["fetch"]) {
       skipResearch: opts.research === "skip",
       draftOnly: opts.draftOnly,
       dryRun: opts.dryRun,
+      targetHerb: opts.targetHerb || null,
+      targetRegion: opts.targetRegion ?? null,
     });
     return c.json(report);
   });

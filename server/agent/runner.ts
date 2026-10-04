@@ -75,6 +75,11 @@ export type AgentRunOptions = {
   dryRun?: boolean;
   /** Submit but skip auto-publish — the entry lands in the admin queue. */
   draftOnly?: boolean;
+  /** Pin a specific herb — for herb mode this becomes common_name,
+   *  for remedy mode this becomes primary_herb_name. Overrides diversity. */
+  targetHerb?: string | null;
+  /** Pin a specific region. Overrides diversity. */
+  targetRegion?: import("./diversity").Region | null;
 };
 
 export type PerPostResult = {
@@ -192,6 +197,8 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
   const snapshot = await readDbSnapshot();
   let plan = chooseNextPlan(snapshot);
   if (opts.forceKind) plan = { ...plan, kind: opts.forceKind };
+  if (opts.targetRegion) plan = { ...plan, region: opts.targetRegion };
+  const targetHerb = opts.targetHerb?.trim() || null;
 
   const doResearch =
     opts.forceResearch || (!opts.skipResearch && Math.random() < env.AGENT_RESEARCH_RATIO);
@@ -223,11 +230,15 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
           category: plan.category,
           region: plan.region,
           avoid: avoid.slice(0, 60),
+          fixedCommonName: targetHerb,
           researchResults,
         });
         const r = await chatJson({ system, user, temperature: 0.6, parse: (o) => herbChoiceSchema.parse(o) });
         const c = r.json;
-        if (nameConflicts(c.common_name, avoid)) {
+        // When the user pinned a specific herb, skip the dedup — they
+        // know what they want and may be deliberately adding something
+        // that's close to an existing entry.
+        if (!targetHerb && nameConflicts(c.common_name, avoid)) {
           avoid.push(c.common_name);
           continue;
         }
@@ -237,21 +248,24 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
           category: plan.category,
           region: plan.region,
           avoid: avoid.slice(0, 60),
-          avoidPrimaryHerbs: remedyAvoidHerbs.slice(0, 40),
+          avoidPrimaryHerbs: targetHerb ? [] : remedyAvoidHerbs.slice(0, 40),
           targetCondition: plan.targetCondition ?? null,
+          fixedPrimary: targetHerb,
           researchResults,
         });
         const r = await chatJson({ system, user, temperature: 0.6, parse: (o) => remedyChoiceSchema.parse(o) });
         const c = r.json;
-        if (nameConflicts(c.name, avoid)) {
-          avoid.push(c.name);
-          continue;
-        }
-        // Reject if the primary herb is already heavily used in existing
-        // remedies — forces the model to pick a different star herb.
-        if (c.primary_herb_name && nameConflicts(c.primary_herb_name, remedyAvoidHerbs)) {
-          remedyAvoidHerbs.push(c.primary_herb_name);
-          continue;
+        // When the user pinned a herb, we WANT more remedies of that
+        // herb — skip both the name dedup and the primary-herb dedup.
+        if (!targetHerb) {
+          if (nameConflicts(c.name, avoid)) {
+            avoid.push(c.name);
+            continue;
+          }
+          if (c.primary_herb_name && nameConflicts(c.primary_herb_name, remedyAvoidHerbs)) {
+            remedyAvoidHerbs.push(c.primary_herb_name);
+            continue;
+          }
         }
         choice = c;
       }

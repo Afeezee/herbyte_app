@@ -1121,10 +1121,16 @@ function AgentPanel() {
   const [research, setResearch] = useState("random"); // 'random' | 'force' | 'skip'
   const [draftOnly, setDraftOnly] = useState(false);
   const [dryRun, setDryRun] = useState(false);
+  const [targetHerb, setTargetHerb] = useState("");   // e.g. "Moringa", "Ginger"
+  const [targetRegion, setTargetRegion] = useState(""); // "" = diversified
   const [lastReport, setLastReport] = useState(null);
 
   const runMutation = useMutation({
-    mutationFn: () => api.agent.run({ n, kind, research, draftOnly, dryRun }),
+    mutationFn: () => api.agent.run({
+      n, kind, research, draftOnly, dryRun,
+      targetHerb: targetHerb.trim() || undefined,
+      targetRegion: targetRegion || undefined,
+    }),
     onSuccess: (report) => {
       setLastReport(report);
       queryClient.invalidateQueries({ queryKey: ['admin-herbs'] });
@@ -1208,6 +1214,60 @@ function AgentPanel() {
                 <KindButton active={research === "force"} onClick={() => setResearch("force")} icon={<Globe className="w-4 h-4" />} label="Force" sub="Always Serper-ground" />
                 <KindButton active={research === "skip"} onClick={() => setResearch("skip")} icon={<SearchCode className="w-4 h-4" />} label="Skip" sub="LLM knowledge only" />
               </div>
+            </div>
+
+            {/* Target herb + region (optional overrides) */}
+            <div className="pt-2 border-t border-dashed border-emerald-200">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700">Target (optional)</label>
+                <span className="text-xs text-gray-500">Leave blank to let the agent choose</span>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="target-herb" className="text-xs text-gray-600 mb-1 block">Specific herb</label>
+                  <Input
+                    id="target-herb"
+                    placeholder="e.g. Moringa, Ginger, Kola nut"
+                    value={targetHerb}
+                    onChange={(e) => setTargetHerb(e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {kind === "herb"
+                      ? "Agent will produce the herb entry for this plant."
+                      : kind === "remedy"
+                        ? "Agent will produce a remedy with this as the primary herb."
+                        : "Herb mode = produces this herb's entry. Remedy mode = uses this as primary herb."}
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="target-region" className="text-xs text-gray-600 mb-1 block">Region</label>
+                  <select
+                    id="target-region"
+                    value={targetRegion}
+                    onChange={(e) => setTargetRegion(e.target.value)}
+                    className="w-full border rounded-md p-2 text-sm bg-white"
+                  >
+                    <option value="">Any (diversified)</option>
+                    <option value="Africa">Africa</option>
+                    <option value="Asia">Asia</option>
+                    <option value="Europe">Europe</option>
+                    <option value="North America">North America</option>
+                    <option value="South America">South America</option>
+                    <option value="Australia">Australia</option>
+                    <option value="Middle East">Middle East</option>
+                    <option value="Global">Global</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Overrides the diversity picker's region choice.
+                  </p>
+                </div>
+              </div>
+              {targetHerb.trim() && (
+                <p className="text-xs text-amber-700 mt-2">
+                  ⚠ Dedup is skipped when a herb is pinned — the agent will produce
+                  the entry even if a similar one already exists.
+                </p>
+              )}
             </div>
 
             {/* Toggles */}

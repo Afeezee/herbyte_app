@@ -28,6 +28,8 @@ export function buildHerbChoicePrompt(opts: {
   category: Category;
   region: Region;
   avoid: string[];
+  /** When set, pin the herb — don't pick, generate the entry for THIS herb. */
+  fixedCommonName?: string | null;
   researchResults?: SearchResult[] | null;
 }): { system: string; user: string } {
   const system = `You are a research-oriented herbalist curator for Herbyte, a herbal-medicine reference site. Pick ONE herb that fits the brief and draft a short, honest baseline entry.
@@ -43,11 +45,20 @@ JSON schema:
   "category": "${opts.category}"      // echo back
 }`;
 
-  const parts: string[] = [
-    `Brief: pick ONE herb primarily used in **${opts.region}** herbal tradition that fits the **${opts.category}** category.`,
-    `Avoid repeating any of these already-covered herbs (match on common OR botanical name):`,
-    opts.avoid.length ? opts.avoid.map((n) => `  - ${n}`).join("\n") : "  (none yet)",
-  ];
+  const parts: string[] = [];
+  if (opts.fixedCommonName) {
+    parts.push(
+      `Brief: produce the Herbyte entry for the specific herb **${opts.fixedCommonName}**.`,
+      `common_name MUST be exactly "${opts.fixedCommonName}" (or the correct canonical variant if the user typed a close name).`,
+      `Fill in botanical_name, description, region (default to **${opts.region}** if it fits), and category (default to **${opts.category}** if it fits — otherwise pick the one that actually matches this herb).`,
+    );
+  } else {
+    parts.push(
+      `Brief: pick ONE herb primarily used in **${opts.region}** herbal tradition that fits the **${opts.category}** category.`,
+      `Avoid repeating any of these already-covered herbs (match on common OR botanical name):`,
+      opts.avoid.length ? opts.avoid.map((n) => `  - ${n}`).join("\n") : "  (none yet)",
+    );
+  }
   if (opts.researchResults) {
     parts.push("");
     parts.push("Ground the entry in these fresh search snippets. Prefer a herb the snippets actually discuss:");
@@ -66,6 +77,8 @@ export function buildRemedyChoicePrompt(opts: {
   avoidPrimaryHerbs?: string[];
   /** Specific health condition this remedy MUST target. */
   targetCondition?: HealthCondition | null;
+  /** When set, pin the primary herb — the remedy MUST use this as its star herb. */
+  fixedPrimary?: string | null;
   researchResults?: SearchResult[] | null;
 }): { system: string; user: string } {
   const system = `You are a research-oriented herbalist curator for Herbyte. Draft ONE community-remedy entry that fits the brief.
@@ -89,22 +102,50 @@ JSON schema:
 }`;
 
   const parts: string[] = [];
-  if (opts.targetCondition) {
+  if (opts.fixedPrimary) {
+    parts.push(
+      `Brief: produce a remedy whose star herb is **${opts.fixedPrimary}**.`,
+      `primary_herb_name MUST be "${opts.fixedPrimary}" (or the correct canonical variant). The remedy should showcase this herb.`,
+    );
+    if (opts.targetCondition) {
+      parts.push(
+        `Target the specific health condition **${opts.targetCondition}** if ${opts.fixedPrimary} is traditionally used for it. If not a good fit, pick another condition this herb IS known for.`,
+      );
+    }
+    parts.push(
+      `Use region = **${opts.region}** if ${opts.fixedPrimary} is grown or used there; otherwise pick the region that fits.`,
+    );
+    // Dedup still useful — avoid producing the EXACT same remedy name
+    // that already exists for this herb.
+    if (opts.avoid.length) {
+      parts.push("", `Avoid naming it identically to any existing remedy:`);
+      parts.push(opts.avoid.slice(0, 20).map((n) => `  - ${n}`).join("\n"));
+    }
+  } else if (opts.targetCondition) {
     parts.push(
       `Brief: a remedy from the **${opts.region}** herbal tradition targeting the specific condition **${opts.targetCondition}**.`,
       `The health_condition field in your output MUST describe this condition. The category (${opts.category}) is secondary — if a different category fits the condition better, use the one that fits.`,
     );
+    parts.push(
+      `Avoid repeating any of these already-covered remedies:`,
+      opts.avoid.length ? opts.avoid.map((n) => `  - ${n}`).join("\n") : "  (none yet)",
+    );
+    if (opts.avoidPrimaryHerbs && opts.avoidPrimaryHerbs.length) {
+      parts.push("");
+      parts.push("ALSO AVOID picking any of these primary herbs — they are already heavily used in existing remedies. Choose a different star herb:");
+      parts.push(opts.avoidPrimaryHerbs.map((n) => `  - ${n}`).join("\n"));
+    }
   } else {
     parts.push(`Brief: a remedy from the **${opts.region}** herbal tradition that fits the **${opts.category}** category.`);
-  }
-  parts.push(
-    `Avoid repeating any of these already-covered remedies:`,
-    opts.avoid.length ? opts.avoid.map((n) => `  - ${n}`).join("\n") : "  (none yet)",
-  );
-  if (opts.avoidPrimaryHerbs && opts.avoidPrimaryHerbs.length) {
-    parts.push("");
-    parts.push("ALSO AVOID picking any of these primary herbs — they are already heavily used in existing remedies. Choose a different star herb:");
-    parts.push(opts.avoidPrimaryHerbs.map((n) => `  - ${n}`).join("\n"));
+    parts.push(
+      `Avoid repeating any of these already-covered remedies:`,
+      opts.avoid.length ? opts.avoid.map((n) => `  - ${n}`).join("\n") : "  (none yet)",
+    );
+    if (opts.avoidPrimaryHerbs && opts.avoidPrimaryHerbs.length) {
+      parts.push("");
+      parts.push("ALSO AVOID picking any of these primary herbs — they are already heavily used in existing remedies. Choose a different star herb:");
+      parts.push(opts.avoidPrimaryHerbs.map((n) => `  - ${n}`).join("\n"));
+    }
   }
   if (opts.researchResults) {
     parts.push("");
