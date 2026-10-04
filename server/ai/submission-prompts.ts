@@ -168,6 +168,9 @@ MANDATORY output fields (must not be empty):
 - draft.primary_herb_name
 - draft.health_condition
 - draft.preparation_method
+- draft.dosage — concrete instructions (amount + frequency + relation to meals). Example: "1 cup, 2–3 times daily, before meals." NEVER leave blank.
+- draft.duration_of_use — how long to continue. Example: "up to 2 weeks, then reassess." NEVER leave blank.
+- draft.observed_effects — 1–3 sentences on what traditional / anecdotal use reports people notice. NEVER leave blank.
 - draft.research_references — if <search_results> has entries, cite AT LEAST ONE whose url matches a search_results url exactly. If <search_results> is empty, return an empty array.
 
 ENUM VALUES must be returned EXACTLY — case, spaces, punctuation:

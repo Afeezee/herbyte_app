@@ -141,6 +141,33 @@ regenerateRoutes.post("/remedy/:id", async (c) => {
       verdict.draft.research_references,
       searchOutcome.results,
     );
+    // Apply the SAME backfill the submission handler does, so empty
+    // usage fields (dosage / duration_of_use / observed_effects / etc.)
+    // get sensible non-blank values instead of staying blank forever.
+    const draft = verdict.draft as unknown as Record<string, unknown>;
+    const inputRec = input as unknown as Record<string, string | undefined>;
+    const strOrEmpty = (v: unknown) =>
+      typeof v === "string" ? v.trim() : "";
+    if (!strOrEmpty(draft.name)) draft.name = inputRec.name ?? "";
+    if (!strOrEmpty(draft.health_condition)) draft.health_condition = inputRec.health_condition ?? "";
+    if (!strOrEmpty(draft.primary_herb_name)) draft.primary_herb_name = inputRec.primary_herb_name ?? "";
+    if (!strOrEmpty(draft.preparation_method)) draft.preparation_method = inputRec.preparation_method ?? "";
+    if (!strOrEmpty(draft.dosage)) {
+      draft.dosage = inputRec.dosage?.trim() ||
+        "Follow traditional dosing (consult a qualified herbalist for individualised guidance).";
+    }
+    if (!strOrEmpty(draft.duration_of_use)) {
+      draft.duration_of_use = inputRec.duration_of_use?.trim() ||
+        "Short-term; typically up to 2 weeks. Reassess with a practitioner if continuing.";
+    }
+    if (!strOrEmpty(draft.observed_effects)) {
+      draft.observed_effects = inputRec.observed_effects?.trim() ||
+        `Traditionally used for ${inputRec.health_condition ?? "this condition"}; individual response varies and may take 1–2 weeks of consistent use to appear.`;
+    }
+    if (!strOrEmpty(draft.description)) {
+      draft.description = `${inputRec.name}: ${draft.observed_effects}. Prepared by ${draft.preparation_method}`;
+    }
+
     await recordUsage({
       endpoint: "regenerate-remedy",
       model: result.model,
@@ -249,6 +276,18 @@ regenerateRoutes.post("/herb/:id", async (c) => {
       verdict.draft.research_references,
       searchOutcome.results,
     );
+    // Backfill required-ish fields from the current record if the AI
+    // dropped them, so blanks don't persist across regenerate clicks.
+    const hd = verdict.draft as unknown as Record<string, unknown>;
+    const hi = input as unknown as Record<string, string | undefined>;
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    if (!str(hd.common_name)) hd.common_name = hi.common_name ?? "";
+    if (!str(hd.botanical_name)) hd.botanical_name = hi.botanical_name ?? "";
+    if (!str(hd.description)) hd.description = hi.description ?? "";
+    if (!str(hd.dosage)) {
+      hd.dosage = "Follow traditional dosing (consult a qualified herbalist for individualised guidance).";
+    }
+
     await recordUsage({
       endpoint: "regenerate-herb",
       model: result.model,

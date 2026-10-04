@@ -313,6 +313,22 @@ submissionRoutes.post("/remedy", async (c) => {
     if (!verdict.draft.name) verdict.draft.name = input.name;
     if (!verdict.draft.health_condition) verdict.draft.health_condition = input.health_condition;
     if (!verdict.draft.preparation_method) verdict.draft.preparation_method = input.preparation_method;
+    // Usage fields the UI shows under "benefits" — if the AI dropped
+    // them (common when it focuses on the enrichment block), fall back
+    // to the submitter's input, then to a generic honest placeholder
+    // so the published row is never blank.
+    if (!verdict.draft.dosage || verdict.draft.dosage.trim().length === 0) {
+      verdict.draft.dosage = input.dosage?.trim() ||
+        "Follow traditional dosing (consult a qualified herbalist for individualised guidance).";
+    }
+    if (!verdict.draft.duration_of_use || verdict.draft.duration_of_use.trim().length === 0) {
+      verdict.draft.duration_of_use = input.duration_of_use?.trim() ||
+        "Short-term; typically up to 2 weeks. Reassess with a practitioner if continuing.";
+    }
+    if (!verdict.draft.observed_effects || verdict.draft.observed_effects.trim().length === 0) {
+      verdict.draft.observed_effects = input.observed_effects?.trim() ||
+        `Traditionally used for ${input.health_condition}; individual response varies and may take 1–2 weeks of consistent use to appear.`;
+    }
     // Evidence gate: no verified citations → auto-reject.
     markRejectedIfNoEvidence(verdict);
   } catch (err) {
