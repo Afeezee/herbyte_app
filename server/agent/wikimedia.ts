@@ -41,11 +41,59 @@ async function wikiFetch<T>(url: string): Promise<T | null> {
 }
 
 /**
+ * OpenSearch fallback — fuzzy title lookup when direct-title + redirects
+ * misses. Returns the top candidate title, or null. Used when e.g.
+ * "African Pepper" has no exact Wikipedia title but the article
+ * "Xylopia aethiopica" exists and matches that term.
+ */
+async function searchWikipediaTitle(query: string): Promise<string | null> {
+  const params = new URLSearchParams({
+    action: "opensearch",
+    format: "json",
+    origin: "*",
+    search: query,
+    limit: "3",
+    namespace: "0",
+  });
+  const data = await wikiFetch<unknown>(`${WIKIPEDIA_API}?${params.toString()}`);
+  // opensearch returns [query, [titles], [descriptions], [urls]]
+  if (!Array.isArray(data)) return null;
+  const titles = (data as unknown[])[1];
+  if (!Array.isArray(titles) || titles.length === 0) return null;
+  const first = titles[0];
+  return typeof first === "string" && first.trim().length > 0 ? first : null;
+}
+
+/**
  * Fetch the lead image of a Wikipedia article by title. Follows
- * redirects (so "Zingiber officinale" lands on "Ginger"). Returns
- * null if no image or no article.
+ * redirects (so "Zingiber officinale" lands on "Ginger"), and if the
+ * direct title (even after redirects) has no match, falls back to
+ * fuzzy opensearch — so "Bitter Leaf", "African Pepper" and other
+ * common names without a canonical title still resolve.
+ * Returns null only if no article matches at all.
  */
 export async function fetchWikipediaLeadImage(title: string): Promise<WikimediaImage | null> {
+  const trimmed = title.trim();
+  if (!trimmed) return null;
+
+  const direct = await fetchWikipediaLeadImageByExactTitle(trimmed);
+  if (direct) return direct;
+
+  // Fuzzy fallback — try the top opensearch candidate.
+  const candidate = await searchWikipediaTitle(trimmed);
+  if (candidate && candidate.toLowerCase() !== trimmed.toLowerCase()) {
+    const fuzzy = await fetchWikipediaLeadImageByExactTitle(candidate);
+    if (fuzzy) return fuzzy;
+  }
+  return null;
+}
+
+/**
+ * Direct-title lookup (with redirect-follow). Separate so the fuzzy
+ * fallback above can call it a second time without re-triggering
+ * search recursion.
+ */
+async function fetchWikipediaLeadImageByExactTitle(title: string): Promise<WikimediaImage | null> {
   const trimmed = title.trim();
   if (!trimmed) return null;
 

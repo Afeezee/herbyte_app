@@ -116,14 +116,28 @@ regenerateRoutes.post("/remedy/:id/image", async (c) => {
   const [row] = await db.select().from(remedies).where(eq(remedies.id, id)).limit(1);
   if (!row) throw new HTTPException(404, { message: "Remedy not found" });
 
-  const img = await fetchHybridImage({
-    common_name: row.primary_herb_name,
-    botanical_name: null,
-    unsplashQueries: buildHerbImageQueries({
-      primary: row.primary_herb_name,
-      companions: row.herbs_used,
-    }),
-  });
+  // Cascade: try primary herb first, then each companion herb — a remedy
+  // like "Bitter Leaf & African Pepper Tonic" should find SOMETHING even
+  // if one of the names fails to resolve on Wikipedia/Unsplash.
+  const candidates = [
+    row.primary_herb_name,
+    ...(Array.isArray(row.herbs_used) ? row.herbs_used : []),
+  ]
+    .map((n) => (typeof n === "string" ? n.trim() : ""))
+    .filter((n, i, arr) => n.length > 0 && arr.indexOf(n) === i);
+
+  let img: { url: string; verifiedBotanicalName?: string | null } | null = null;
+  for (const name of candidates) {
+    img = await fetchHybridImage({
+      common_name: name,
+      botanical_name: null,
+      unsplashQueries: buildHerbImageQueries({
+        primary: name,
+        companions: candidates.filter((c) => c !== name),
+      }),
+    });
+    if (img) break;
+  }
   if (!img) {
     return c.json({ ok: false, image_url: null, message: "No image found on Wikimedia or Unsplash." }, 200);
   }
