@@ -19,7 +19,8 @@ import {
   readDbSnapshot,
 } from "./diversity";
 import { buildHerbChoicePrompt, buildRemedyChoicePrompt } from "./prompts";
-import { buildHerbImageQueries, pingUnsplashDownload, searchUnsplashCascade, type UnsplashImage } from "./unsplash";
+import { buildHerbImageQueries, pingUnsplashDownload, searchUnsplashCascade } from "./unsplash";
+import { fetchWikimediaImage } from "./wikimedia";
 
 // ---------------------------------------------------------------------------
 // Lightweight schemas for the agent's own generation call. The real
@@ -306,13 +307,40 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
   const displayName =
     "common_name" in choice ? choice.common_name : (choice as RemedyChoice).name;
 
-  // Stock image — plant imagery only, never prepared-drink photos.
-  // Cascade of short common-name queries (primary + 1 companion for
-  // remedies, then primary + 'plant' / 'leaves' / 'herb', then primary
-  // alone) so we always try the most specific first and fall back if
-  // Unsplash returns nothing.
-  let image: UnsplashImage | null = null;
-  if (env.UNSPLASH_ACCESS_KEY) {
+  // Image: try Wikimedia first (correct botanical identification), then
+  // Unsplash as a lifestyle-aesthetic fallback. Wikimedia also returns
+  // the Wikidata-verified botanical name as a free side-effect — we
+  // use it to overwrite the AI's botanical name if the two disagree.
+  let image: { url: string; attribution: string } | null = null;
+  const commonName =
+    plan.kind === "herb"
+      ? (choice as HerbChoice).common_name
+      : (choice as RemedyChoice).primary_herb_name;
+  const botanicalName =
+    plan.kind === "herb" ? (choice as HerbChoice).botanical_name : null;
+  try {
+    const wm = await fetchWikimediaImage({
+      common_name: commonName,
+      botanical_name: botanicalName,
+    });
+    if (wm) {
+      image = { url: wm.url, attribution: wm.attribution };
+      // Correct the AI's botanical name against Wikidata's taxon name
+      // when both exist and disagree. Preserves whatever the AI put
+      // when Wikidata has nothing to verify against.
+      if (
+        plan.kind === "herb" &&
+        wm.verifiedBotanicalName &&
+        botanicalName &&
+        botanicalName.toLowerCase() !== wm.verifiedBotanicalName.toLowerCase()
+      ) {
+        (choice as HerbChoice).botanical_name = wm.verifiedBotanicalName;
+      }
+    }
+  } catch {
+    // Wikimedia best-effort — fall through to Unsplash.
+  }
+  if (!image && env.UNSPLASH_ACCESS_KEY) {
     try {
       const queries =
         plan.kind === "herb"
@@ -326,13 +354,13 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
             });
       const match = await searchUnsplashCascade(env.UNSPLASH_ACCESS_KEY, queries);
       if (match) {
-        image = match.image;
+        image = { url: match.image.url, attribution: match.image.attribution };
         if (!opts.dryRun) {
-          await pingUnsplashDownload(env.UNSPLASH_ACCESS_KEY, image.download_location);
+          await pingUnsplashDownload(env.UNSPLASH_ACCESS_KEY, match.image.download_location);
         }
       }
     } catch {
-      image = null;
+      /* fall through */
     }
   }
 

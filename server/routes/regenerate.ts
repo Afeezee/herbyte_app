@@ -22,6 +22,7 @@ import { search, filterCitedReferences } from "../ai/search";
 import { logEvent } from "../ai/events";
 import { getEnv } from "../env";
 import { buildHerbImageQueries, pingUnsplashDownload, searchUnsplashCascade } from "../agent/unsplash";
+import { fetchWikimediaImage } from "../agent/wikimedia";
 import {
   buildHerbModerationPrompt,
   buildRemedyModerationPrompt,
@@ -48,19 +49,33 @@ function isEmpty(v: unknown): boolean {
 }
 
 /**
- * Fetch a licensed stock photo via a cascade of queries (specific →
- * generic). Returns null if there's no UNSPLASH_ACCESS_KEY, all
- * queries came back empty, or the request errored — image is a
- * nice-to-have, never a blocker.
+ * Fetch a herb/remedy image. Tries Wikipedia/Wikimedia Commons first
+ * (botanically correct, no brand collisions), falls back to Unsplash
+ * cascade on miss. Returns `{url, verifiedBotanicalName?}` or null.
+ * Image is a nice-to-have — never a blocker.
  */
-async function fetchStockImage(queries: string[]): Promise<string | null> {
+async function fetchHybridImage(opts: {
+  common_name?: string | null;
+  botanical_name?: string | null;
+  unsplashQueries: string[];
+}): Promise<{ url: string; verifiedBotanicalName?: string | null } | null> {
+  // 1) Wikimedia (encyclopedic, verified)
+  try {
+    const wm = await fetchWikimediaImage({
+      common_name: opts.common_name ?? null,
+      botanical_name: opts.botanical_name ?? null,
+    });
+    if (wm) return { url: wm.url, verifiedBotanicalName: wm.verifiedBotanicalName ?? null };
+  } catch { /* fall through */ }
+
+  // 2) Unsplash cascade (fallback)
   const env = getEnv();
   if (!env.UNSPLASH_ACCESS_KEY) return null;
   try {
-    const match = await searchUnsplashCascade(env.UNSPLASH_ACCESS_KEY, queries);
+    const match = await searchUnsplashCascade(env.UNSPLASH_ACCESS_KEY, opts.unsplashQueries);
     if (!match) return null;
     await pingUnsplashDownload(env.UNSPLASH_ACCESS_KEY, match.image.download_location);
-    return match.image.url;
+    return { url: match.image.url };
   } catch {
     return null;
   }
@@ -175,17 +190,19 @@ regenerateRoutes.post("/remedy/:id", async (c) => {
       outputTokens: result.usage.output_tokens,
     });
 
-    // Fetch a stock image if the record doesn't already have one.
-    // Cascade of plant-anchored queries so we always try the most
-    // specific first and fall back to simpler ones.
+    // Fetch an image if the record doesn't already have one.
+    // Wikimedia first (botanically correct), Unsplash cascade fallback.
     let fetchedImage: string | null = null;
     if (isEmpty(row.image_url)) {
-      fetchedImage = await fetchStockImage(
-        buildHerbImageQueries({
+      const img = await fetchHybridImage({
+        common_name: row.primary_herb_name,
+        botanical_name: null,
+        unsplashQueries: buildHerbImageQueries({
           primary: row.primary_herb_name,
           companions: row.herbs_used,
         }),
-      );
+      });
+      fetchedImage = img?.url ?? null;
     }
     const draftWithImage: Record<string, unknown> = {
       ...(verdict.draft as unknown as Record<string, unknown>),
@@ -300,21 +317,43 @@ regenerateRoutes.post("/herb/:id", async (c) => {
       outputTokens: result.usage.output_tokens,
     });
 
+    // Wikimedia first (also gives us Wikidata's authoritative taxon name),
+    // Unsplash cascade fallback.
     let fetchedImage: string | null = null;
-    if (isEmpty(row.image_url)) {
-      fetchedImage = await fetchStockImage(
-        buildHerbImageQueries({
-          primary: row.common_name,
-          botanical: row.botanical_name,
-        }),
-      );
+    let verifiedBotanical: string | null = null;
+    const img = await fetchHybridImage({
+      common_name: row.common_name,
+      botanical_name: row.botanical_name,
+      unsplashQueries: buildHerbImageQueries({
+        primary: row.common_name,
+        botanical: row.botanical_name,
+      }),
+    });
+    if (img) {
+      verifiedBotanical = img.verifiedBotanicalName ?? null;
+      if (isEmpty(row.image_url)) fetchedImage = img.url;
     }
     const draftWithImage: Record<string, unknown> = {
       ...(verdict.draft as unknown as Record<string, unknown>),
     };
     if (fetchedImage) draftWithImage.image_url = fetchedImage;
 
-    const patch = fillMissing(row as unknown as Record<string, unknown>, draftWithImage);
+    // If Wikidata gave us an authoritative taxon name that disagrees
+    // with what's stored, correct the record — AI/common-name pairing
+    // sometimes drifts (e.g. "Kola" paired with the wrong species).
+    // We overwrite botanical_name here (fillMissing only writes blanks),
+    // because the point of the override is to fix a wrong value.
+    const patch = fillMissing(row as unknown as Record<string, unknown>, draftWithImage) as Record<string, unknown>;
+    if (
+      verifiedBotanical &&
+      typeof row.botanical_name === "string" &&
+      row.botanical_name.trim().length > 0 &&
+      row.botanical_name.trim().toLowerCase() !== verifiedBotanical.toLowerCase()
+    ) {
+      patch.botanical_name = verifiedBotanical;
+    } else if (verifiedBotanical && isEmpty(row.botanical_name)) {
+      patch.botanical_name = verifiedBotanical;
+    }
     if (Object.keys(patch).length > 0) {
       const updates: Record<string, unknown> = { ...patch, updated_date: sql`now()` };
       await db
