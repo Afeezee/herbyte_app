@@ -228,15 +228,11 @@ regenerateRoutes.post("/remedy/:id", async (c) => {
 
   const [row] = await db.select().from(remedies).where(eq(remedies.id, id)).limit(1);
   if (!row) throw new HTTPException(404, { message: "Remedy not found" });
-  if (!row.agent_generated) {
-    throw new HTTPException(400, {
-      message: "Regenerate is only available for agent-generated entries",
-      cause: { code: "not_agent_generated" },
-    });
-  }
 
   // Build a submission-style input from the current row so we can reuse
-  // the moderation prompt verbatim.
+  // the moderation prompt verbatim. Note: fillMissing() below only
+  // writes to currently-empty fields, so human-authored content is
+  // never overwritten — safe to run on any record.
   const input = {
     name: row.name,
     primary_herb_name: row.primary_herb_name,
@@ -375,12 +371,9 @@ regenerateRoutes.post("/herb/:id", async (c) => {
 
   const [row] = await db.select().from(herbs).where(eq(herbs.id, id)).limit(1);
   if (!row) throw new HTTPException(404, { message: "Herb not found" });
-  if (!row.agent_generated) {
-    throw new HTTPException(400, {
-      message: "Regenerate is only available for agent-generated entries",
-      cause: { code: "not_agent_generated" },
-    });
-  }
+  // fillMissing() below only writes to currently-empty fields, so
+  // human-authored content is never overwritten — safe to run on any
+  // record, not just agent-generated ones.
 
   const input = {
     common_name: row.common_name,

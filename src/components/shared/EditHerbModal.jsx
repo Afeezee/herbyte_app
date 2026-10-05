@@ -22,7 +22,6 @@ export default function EditHerbModal({ herb, onClose, onSuccess }) {
     image_url: herb.image_url || ""
   });
   const [uploadingImage, setUploadingImage] = useState(false);
-  const isAgentGenerated = !!herb.agent_generated;
 
   const updateMutation = useMutation({
     mutationFn: (data) => api.entities.Herb.update(herb.id, data),
@@ -288,20 +287,18 @@ export default function EditHerbModal({ herb, onClose, onSuccess }) {
               <Button type="submit" className="flex-1 bg-[#4A7C2E] hover:bg-[#2D5016]" disabled={updateMutation.isPending || regenerateMutation.isPending}>
                 {updateMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : "Save Changes"}
               </Button>
-              {isAgentGenerated && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-emerald-600 text-emerald-700 hover:bg-emerald-50"
-                  onClick={() => regenerateMutation.mutate()}
-                  disabled={regenerateMutation.isPending || updateMutation.isPending}
-                  title="Fill any empty fields with AI-generated content (web-searched)"
-                >
-                  {regenerateMutation.isPending
-                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Regenerating…</>
-                    : <><Sparkles className="w-4 h-4 mr-2" /> Regenerate missing</>}
-                </Button>
-              )}
+              <Button
+                type="button"
+                variant="outline"
+                className="border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => regenerateMutation.mutate()}
+                disabled={regenerateMutation.isPending || updateMutation.isPending}
+                title="Fill any empty fields with AI-generated content (web-searched). Existing values are never overwritten."
+              >
+                {regenerateMutation.isPending
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Regenerating…</>
+                  : <><Sparkles className="w-4 h-4 mr-2" /> Regenerate missing</>}
+              </Button>
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             </div>
           </form>
