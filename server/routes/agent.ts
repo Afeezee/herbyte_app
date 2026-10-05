@@ -100,6 +100,9 @@ const adminRunSchema = z.object({
   targetHerb: z.string().trim().max(120).optional(),
   /** Pin a specific region — overrides diversity pick. */
   targetRegion: z.enum(REGIONS).optional(),
+  /** Pin a specific health condition the remedy must target. Free text —
+   *  admin can pick from the curated list or type a custom one. */
+  targetCondition: z.string().trim().max(200).optional(),
 });
 
 function requireAdmin(c: Context<{ Variables: Variables }>) {
@@ -142,6 +145,7 @@ export function makeAgentAdminRoutes(appFetch: HonoApp["fetch"]) {
       dryRun: opts.dryRun,
       targetHerb: opts.targetHerb || null,
       targetRegion: opts.targetRegion ?? null,
+      targetCondition: opts.targetCondition || null,
     });
     return c.json(report);
   });

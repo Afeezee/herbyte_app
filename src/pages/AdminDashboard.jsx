@@ -1123,6 +1123,7 @@ function AgentPanel() {
   const [dryRun, setDryRun] = useState(false);
   const [targetHerb, setTargetHerb] = useState("");   // e.g. "Moringa", "Ginger"
   const [targetRegion, setTargetRegion] = useState(""); // "" = diversified
+  const [targetCondition, setTargetCondition] = useState(""); // e.g. "fatty liver"
   const [lastReport, setLastReport] = useState(null);
 
   const runMutation = useMutation({
@@ -1130,6 +1131,7 @@ function AgentPanel() {
       n, kind, research, draftOnly, dryRun,
       targetHerb: targetHerb.trim() || undefined,
       targetRegion: targetRegion || undefined,
+      targetCondition: targetCondition.trim() || undefined,
     }),
     onSuccess: (report) => {
       setLastReport(report);
@@ -1216,12 +1218,65 @@ function AgentPanel() {
               </div>
             </div>
 
-            {/* Target herb + region (optional overrides) */}
+            {/* Target herb, condition, region (optional overrides) */}
             <div className="pt-2 border-t border-dashed border-emerald-200">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-semibold text-gray-700">Target (optional)</label>
                 <span className="text-xs text-gray-500">Leave blank to let the agent choose</span>
               </div>
+
+              {/* Autocomplete suggestions for health condition */}
+              <datalist id="agent-condition-suggestions">
+                <option value="weight loss and obesity" />
+                <option value="fatty liver disease" />
+                <option value="type 2 diabetes and blood sugar" />
+                <option value="high cholesterol" />
+                <option value="thyroid support" />
+                <option value="PCOS and hormonal balance" />
+                <option value="menopausal symptoms" />
+                <option value="high blood pressure" />
+                <option value="poor circulation" />
+                <option value="varicose veins" />
+                <option value="kidney stones" />
+                <option value="urinary tract infections" />
+                <option value="water retention" />
+                <option value="acne" />
+                <option value="eczema" />
+                <option value="psoriasis" />
+                <option value="hair loss and thinning" />
+                <option value="wound healing" />
+                <option value="dry eyes and eye strain" />
+                <option value="age-related macular support" />
+                <option value="osteoporosis and bone density" />
+                <option value="arthritis and joint stiffness" />
+                <option value="back pain and sciatica" />
+                <option value="muscle recovery and soreness" />
+                <option value="acid reflux and heartburn" />
+                <option value="constipation" />
+                <option value="bloating and gas" />
+                <option value="irritable bowel symptoms" />
+                <option value="nausea" />
+                <option value="parasites and gut cleanse" />
+                <option value="cough and bronchitis" />
+                <option value="asthma support" />
+                <option value="sinus congestion" />
+                <option value="sore throat" />
+                <option value="common cold and flu" />
+                <option value="immune resilience" />
+                <option value="fever reduction" />
+                <option value="insomnia and sleep quality" />
+                <option value="anxiety and stress" />
+                <option value="mild depression and low mood" />
+                <option value="memory and focus" />
+                <option value="migraine and tension headache" />
+                <option value="menstrual cramps" />
+                <option value="low libido" />
+                <option value="fertility support" />
+                <option value="prostate health" />
+                <option value="oral health and gum care" />
+                <option value="earache and ear infections" />
+              </datalist>
+
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="target-herb" className="text-xs text-gray-600 mb-1 block">Specific herb</label>
@@ -1259,6 +1314,23 @@ function AgentPanel() {
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
                     Overrides the diversity picker's region choice.
+                  </p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="target-condition" className="text-xs text-gray-600 mb-1 block">
+                    Health condition (remedies only — ignored for herb mode)
+                  </label>
+                  <Input
+                    id="target-condition"
+                    list="agent-condition-suggestions"
+                    placeholder="e.g. fatty liver disease — or type a custom one"
+                    value={targetCondition}
+                    onChange={(e) => setTargetCondition(e.target.value)}
+                    disabled={kind === "herb"}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    The remedy's health_condition will be set to this. Start typing to
+                    pick from common conditions, or supply something specific.
                   </p>
                 </div>
               </div>

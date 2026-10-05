@@ -80,6 +80,9 @@ export type AgentRunOptions = {
   targetHerb?: string | null;
   /** Pin a specific region. Overrides diversity. */
   targetRegion?: import("./diversity").Region | null;
+  /** Pin a specific health condition the remedy targets. Free text —
+   *  the admin can pick from the curated list or supply something custom. */
+  targetCondition?: string | null;
 };
 
 export type PerPostResult = {
@@ -198,6 +201,12 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
   let plan = chooseNextPlan(snapshot);
   if (opts.forceKind) plan = { ...plan, kind: opts.forceKind };
   if (opts.targetRegion) plan = { ...plan, region: opts.targetRegion };
+  if (opts.targetCondition) {
+    // Override whatever the diversity planner chose. Cast is safe —
+    // prompts treat targetCondition as a free-form string anyway;
+    // the enum is just a convenience for the auto-pick path.
+    plan = { ...plan, targetCondition: opts.targetCondition.trim() as never };
+  }
   const targetHerb = opts.targetHerb?.trim() || null;
 
   const doResearch =
