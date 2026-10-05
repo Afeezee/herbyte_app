@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { X, Loader2, Sparkles } from "lucide-react";
+import { X, Loader2, Sparkles, Trash2, ImageIcon } from "lucide-react";
 
 export default function EditHerbModal({ herb, onClose, onSuccess }) {
   const queryClient = useQueryClient();
@@ -32,6 +32,25 @@ export default function EditHerbModal({ herb, onClose, onSuccess }) {
       onSuccess?.();
       onClose();
     },
+  });
+
+  const regenerateImageMutation = useMutation({
+    mutationFn: () => api.regenerate.herbImage(herb.id),
+    onSuccess: (res) => {
+      if (res?.image_url) {
+        setFormData((f) => ({
+          ...f,
+          image_url: res.image_url,
+          // If Wikidata corrected the botanical name, pick that up too.
+          botanical_name: res.botanical_name || f.botanical_name,
+        }));
+        queryClient.invalidateQueries({ queryKey: ['herb', herb.id] });
+        queryClient.invalidateQueries({ queryKey: ['herbs'] });
+      } else {
+        alert(res?.message || "No image found. Try editing the common/botanical name and retrying.");
+      }
+    },
+    onError: (err) => alert(`Image fetch failed: ${err?.message ?? "unknown error"}`),
   });
 
   const regenerateMutation = useMutation({
@@ -100,13 +119,57 @@ export default function EditHerbModal({ herb, onClose, onSuccess }) {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label>Image</Label>
-              <div className="mt-2 flex items-center gap-4">
-                {formData.image_url && (
-                  <img src={formData.image_url} alt="Herb" className="w-24 h-24 object-cover rounded-lg" />
+              <div className="mt-2 flex items-start gap-4">
+                {formData.image_url ? (
+                  <div className="relative">
+                    <img src={formData.image_url} alt="Herb" className="w-24 h-24 object-cover rounded-lg border" />
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, image_url: ""})}
+                      className="absolute -top-2 -right-2 bg-white border border-red-300 text-red-600 rounded-full p-1 shadow hover:bg-red-50"
+                      title="Remove image"
+                      aria-label="Remove image"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400">
+                    <ImageIcon className="w-6 h-6" />
+                  </div>
                 )}
-                <div className="flex-1">
+                <div className="flex-1 space-y-2">
                   <Input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploadingImage} />
-                  {uploadingImage && <p className="text-sm text-gray-500 mt-1">Uploading...</p>}
+                  {uploadingImage && <p className="text-sm text-gray-500">Uploading…</p>}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                      onClick={() => regenerateImageMutation.mutate()}
+                      disabled={regenerateImageMutation.isPending || uploadingImage}
+                      title="Replace with a fresh image from Wikipedia/Wikimedia Commons (fallback: Unsplash)"
+                    >
+                      {regenerateImageMutation.isPending
+                        ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Fetching…</>
+                        : <><Sparkles className="w-3.5 h-3.5 mr-1" /> Fetch new image</>}
+                    </Button>
+                    {formData.image_url && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:bg-red-50"
+                        onClick={() => setFormData({...formData, image_url: ""})}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Upload a file, fetch one automatically, or remove the current image. Changes save when you click <strong>Save Changes</strong>.
+                  </p>
                 </div>
               </div>
             </div>

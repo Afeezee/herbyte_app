@@ -176,6 +176,17 @@ const regenerate = {
       method: 'POST',
       body: {},
     }),
+  // Image-only — cheap, no LLM. Works on any record, published or not.
+  herbImage: (id) =>
+    request(`/regenerate/herb/${encodeURIComponent(id)}/image`, {
+      method: 'POST',
+      body: {},
+    }),
+  remedyImage: (id) =>
+    request(`/regenerate/remedy/${encodeURIComponent(id)}/image`, {
+      method: 'POST',
+      body: {},
+    }),
 }
 
 // Agent runs — admin-only on-demand trigger. Options:

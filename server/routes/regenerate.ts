@@ -101,6 +101,112 @@ function fillMissing<T extends Record<string, unknown>>(
 
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Image-only regenerate. Cheap (no LLM, no AI budget), overwrites a
+// record's image_url with a fresh Wikimedia/Unsplash lookup. Works on
+// any record (not gated on agent_generated), and is what the edit modal
+// "Fetch new image" button calls when the admin wants to replace a bad
+// picture after publishing.
+
+regenerateRoutes.post("/remedy/:id/image", async (c) => {
+  requireAdmin(c);
+  const id = c.req.param("id");
+  const db = getDb();
+
+  const [row] = await db.select().from(remedies).where(eq(remedies.id, id)).limit(1);
+  if (!row) throw new HTTPException(404, { message: "Remedy not found" });
+
+  const img = await fetchHybridImage({
+    common_name: row.primary_herb_name,
+    botanical_name: null,
+    unsplashQueries: buildHerbImageQueries({
+      primary: row.primary_herb_name,
+      companions: row.herbs_used,
+    }),
+  });
+  if (!img) {
+    return c.json({ ok: false, image_url: null, message: "No image found on Wikimedia or Unsplash." }, 200);
+  }
+
+  await db
+    .update(remedies)
+    .set({ image_url: img.url, updated_date: sql`now()` } as never)
+    .where(eq(remedies.id, id));
+
+  await logEvent({
+    endpoint: "regenerate-remedy-image",
+    userEmail: c.get("user").email,
+    submissionId: id,
+    verdict: "ok",
+    model: "none",
+    provider: "wikimedia-or-unsplash",
+    inputTokens: 0,
+    outputTokens: 0,
+    summary: { image_url: img.url },
+  });
+
+  return c.json({ ok: true, image_url: img.url });
+});
+
+regenerateRoutes.post("/herb/:id/image", async (c) => {
+  requireAdmin(c);
+  const id = c.req.param("id");
+  const db = getDb();
+
+  const [row] = await db.select().from(herbs).where(eq(herbs.id, id)).limit(1);
+  if (!row) throw new HTTPException(404, { message: "Herb not found" });
+
+  const img = await fetchHybridImage({
+    common_name: row.common_name,
+    botanical_name: row.botanical_name,
+    unsplashQueries: buildHerbImageQueries({
+      primary: row.common_name,
+      botanical: row.botanical_name,
+    }),
+  });
+  if (!img) {
+    return c.json({ ok: false, image_url: null, message: "No image found on Wikimedia or Unsplash." }, 200);
+  }
+
+  // If Wikidata gave us a corrected taxon name, also fix botanical_name
+  // on the record — the point of this flow is "trust the authoritative
+  // source", so overwrite even when a (wrong) value was already stored.
+  const updates: Record<string, unknown> = { image_url: img.url, updated_date: sql`now()` };
+  if (
+    img.verifiedBotanicalName &&
+    (isEmpty(row.botanical_name) ||
+      (typeof row.botanical_name === "string" &&
+        row.botanical_name.trim().toLowerCase() !== img.verifiedBotanicalName.toLowerCase()))
+  ) {
+    updates.botanical_name = img.verifiedBotanicalName;
+  }
+
+  await db
+    .update(herbs)
+    .set(updates as never)
+    .where(eq(herbs.id, id));
+
+  await logEvent({
+    endpoint: "regenerate-herb-image",
+    userEmail: c.get("user").email,
+    submissionId: id,
+    verdict: "ok",
+    model: "none",
+    provider: "wikimedia-or-unsplash",
+    inputTokens: 0,
+    outputTokens: 0,
+    summary: { image_url: img.url, botanical_name_fixed: !!updates.botanical_name },
+  });
+
+  return c.json({
+    ok: true,
+    image_url: img.url,
+    botanical_name: (updates.botanical_name as string | undefined) ?? row.botanical_name ?? null,
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 regenerateRoutes.post("/remedy/:id", async (c) => {
   requireAdmin(c);
   const id = c.req.param("id");
