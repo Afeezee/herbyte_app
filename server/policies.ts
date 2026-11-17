@@ -186,6 +186,11 @@ const remedyPolicy: Policy = {
     "safety_rating",
   ],
   sortable_fields: ["created_date", "updated_date", "name", "featured"],
+  // Anonymous and non-admin callers see only AI-approved (published)
+  // remedies. Admins see every row, drafts included, so they can
+  // moderate from the dashboard.
+  readFilter: (u) =>
+    isAdmin(u) ? null : eq(schema.remedies.approved_by_ai, true),
   canCreate: (u) => (isAdmin(u) ? allow : denyAdminOnly),
   canUpdate: (u) => (isAdmin(u) ? allow : denyAdminOnly),
   canDelete: (u) => (isAdmin(u) ? allow : denyAdminOnly),
@@ -224,6 +229,19 @@ const productPolicy: Policy = {
     "linked_remedy_id",
   ],
   sortable_fields: ["created_date", "updated_date", "price", "product_name"],
+  // Anonymous and non-admin callers see only approved products. Admins
+  // see every row (including pending/rejected) so moderation works.
+  // Sellers see their own products regardless of state via explicit
+  // ?seller_id=… filtering (the row-visibility rules above still
+  // require admin for drafts of others).
+  readFilter: (u) => {
+    if (isAdmin(u)) return null;
+    const approved = eq(schema.products.moderation_status, "Approved");
+    if (u?.seller_profile_id) {
+      return or(approved, eq(schema.products.seller_id, u.seller_profile_id))!;
+    }
+    return approved;
+  },
   canCreate: (u) => {
     if (!u) return denySignedInRequired;
     if (!u.seller_profile_id) {

@@ -2,6 +2,8 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "@/api/client";
 import { createPageUrl } from "@/utils";
+import { SignedIn, SignedOut, SignInButton, SignUpButton, useUser } from "@clerk/clerk-react";
+import { Button } from "@/components/ui/button";
 import { Leaf, Search, BookOpen, Send, Info, Mail, Menu, MessageCircle, Beaker, Store, User, Heart, Calendar, Shield } from "lucide-react";
 import {
   Sidebar,
@@ -19,91 +21,57 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import AIAssistant from "./components/herbs/AIAssistant";
 
+// Nav items tagged by audience. `public` items appear to everyone;
+// `user` items appear only to signed-in visitors; `admin` only to admins.
+// A signed-out visitor sees just the public ones alongside Sign-in /
+// Create-account CTAs.
 const navigationItems = [
-  {
-    title: "Home",
-    url: createPageUrl("Home"),
-    icon: Leaf,
-  },
-  {
-    title: "Explore Remedies",
-    url: createPageUrl("ExploreRemedies"),
-    icon: Beaker,
-  },
-  {
-    title: "Browse Herbs",
-    url: createPageUrl("ExploreHerbs"),
-    icon: Search,
-  },
-  {
-    title: "Shop Products",
-    url: createPageUrl("ExploreProducts"),
-    icon: BookOpen,
-  },
-  {
-    title: "Events",
-    url: createPageUrl("Events"),
-    icon: Calendar,
-  },
-  {
-    title: "Become a Seller",
-    url: createPageUrl("SellerDashboard"),
-    icon: Store,
-  },
-  {
-    title: "Submit Remedy",
-    url: createPageUrl("SubmitRemedy"),
-    icon: Send,
-  },
-  {
-    title: "My Wishlist",
-    url: createPageUrl("Wishlist"),
-    icon: Heart,
-  },
-  {
-    title: "My Profile",
-    url: createPageUrl("UserProfile"),
-    icon: User,
-  },
-  {
-    title: "About Us",
-    url: createPageUrl("About"),
-    icon: Info,
-  },
-  {
-    title: "Contact",
-    url: createPageUrl("Contact"),
-    icon: Mail,
-  },
+  { title: "Home",             url: createPageUrl("Home"),            icon: Leaf,     audience: "public" },
+  { title: "Explore Remedies", url: createPageUrl("ExploreRemedies"), icon: Beaker,   audience: "public" },
+  { title: "Browse Herbs",     url: createPageUrl("ExploreHerbs"),    icon: Search,   audience: "public" },
+  { title: "Shop Products",    url: createPageUrl("ExploreProducts"), icon: BookOpen, audience: "public" },
+  { title: "Events",           url: createPageUrl("Events"),          icon: Calendar, audience: "public" },
+  { title: "Become a Seller",  url: createPageUrl("SellerDashboard"), icon: Store,    audience: "user"   },
+  { title: "Submit Remedy",    url: createPageUrl("SubmitRemedy"),    icon: Send,     audience: "user"   },
+  { title: "My Wishlist",      url: createPageUrl("Wishlist"),        icon: Heart,    audience: "user"   },
+  { title: "My Profile",       url: createPageUrl("UserProfile"),     icon: User,     audience: "user"   },
+  { title: "About Us",         url: createPageUrl("About"),           icon: Info,     audience: "public" },
+  { title: "Contact",          url: createPageUrl("Contact"),         icon: Mail,     audience: "public" },
+  { title: "Admin Dashboard",  url: createPageUrl("AdminDashboard"),  icon: Shield,   audience: "admin"  },
 ];
-
-const adminNavItem = {
-  title: "Admin Dashboard",
-  url: createPageUrl("AdminDashboard"),
-  icon: Shield,
-};
 
 export default function Layout({ children, currentPageName }) {
   const location = useLocation();
+  const { isSignedIn, isLoaded: clerkLoaded } = useUser();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [showAIAssistant, setShowAIAssistant] = React.useState(false);
   const [user, setUser] = React.useState(null);
 
   React.useEffect(() => {
-    const fetchUser = async () => {
+    // Only hit /api/auth/me when Clerk has us signed in — saves a
+    // guaranteed-401 round-trip for anonymous browsers.
+    if (!clerkLoaded || !isSignedIn) {
+      setUser(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
       try {
         const currentUser = await api.auth.me();
-        setUser(currentUser);
+        if (!cancelled) setUser(currentUser);
       } catch {
-        // Not logged in
+        if (!cancelled) setUser(null);
       }
-    };
-    fetchUser();
-  }, []);
+    })();
+    return () => { cancelled = true; };
+  }, [clerkLoaded, isSignedIn]);
 
-  const allNavItems = user?.role === 'admin' 
-    ? [...navigationItems, adminNavItem] 
-    : navigationItems;
+  const allNavItems = navigationItems.filter((item) => {
+    if (item.audience === "public") return true;
+    if (item.audience === "user") return isSignedIn;
+    if (item.audience === "admin") return user?.role === "admin";
+    return false;
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FFFEF9] to-[#F5F1E8]">
@@ -148,6 +116,16 @@ export default function Layout({ children, currentPageName }) {
                   <span className="text-sm">{item.title}</span>
                 </Link>
               ))}
+              <SignedOut>
+                <div className="flex items-center gap-2 border-l border-[#2D5016]/10 pl-4 ml-1">
+                  <SignInButton mode="redirect" forceRedirectUrl={location.pathname}>
+                    <Button variant="ghost" size="sm" className="text-[#2D5016] hover:bg-[#F5F1E8]">Sign in</Button>
+                  </SignInButton>
+                  <SignUpButton mode="redirect" forceRedirectUrl={location.pathname}>
+                    <Button size="sm" className="bg-[#4A7C2E] hover:bg-[#2D5016] text-white">Create account</Button>
+                  </SignUpButton>
+                </div>
+              </SignedOut>
             </nav>
           </div>
         </div>
@@ -184,6 +162,14 @@ export default function Layout({ children, currentPageName }) {
                   <span>{item.title}</span>
                 </Link>
               ))}
+              <SignedOut>
+                <SignInButton mode="redirect" forceRedirectUrl={location.pathname}>
+                  <Button variant="ghost" size="sm" className="text-[#2D5016] hover:bg-[#F5F1E8]">Sign in</Button>
+                </SignInButton>
+                <SignUpButton mode="redirect" forceRedirectUrl={location.pathname}>
+                  <Button size="sm" className="bg-[#4A7C2E] hover:bg-[#2D5016] text-white">Create account</Button>
+                </SignUpButton>
+              </SignedOut>
             </nav>
           </div>
         </div>
@@ -225,6 +211,16 @@ export default function Layout({ children, currentPageName }) {
                 <span>{item.title}</span>
               </Link>
             ))}
+            <SignedOut>
+              <div className="pt-3 mt-2 border-t border-[#2D5016]/10 flex flex-col gap-2">
+                <SignInButton mode="redirect" forceRedirectUrl={location.pathname}>
+                  <Button variant="outline" className="w-full border-[#2D5016] text-[#2D5016] hover:bg-[#F5F1E8]">Sign in</Button>
+                </SignInButton>
+                <SignUpButton mode="redirect" forceRedirectUrl={location.pathname}>
+                  <Button className="w-full bg-[#4A7C2E] hover:bg-[#2D5016] text-white">Create account</Button>
+                </SignUpButton>
+              </div>
+            </SignedOut>
           </nav>
         )}
       </header>

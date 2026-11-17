@@ -1,7 +1,7 @@
 import { Hono, type Context, type Next } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { cors } from "hono/cors";
-import { AuthError, requireUser, type SessionUser } from "./auth";
+import { AuthError, optionalUser, requireUser, type SessionUser } from "./auth";
 import { getEnv } from "./env";
 import { authRoutes, clerkWebhook } from "./routes/auth";
 import { entitiesRoutes } from "./routes/entities";
@@ -17,7 +17,22 @@ import { regenerateRoutes } from "./routes/regenerate";
 // on failure. Handlers throw HTTPException; a global error handler maps them.
 // -----------------------------------------------------------------------------
 
+// Default variables — non-null `user` because all routes except the
+// public-entity GETs go through `requireAuthMiddleware`.
+// The entities router uses its own `EntitiesVariables` to express that
+// `user` may be null on anonymous GET.
 export type Variables = { user: SessionUser };
+export type EntitiesVariables = { user: SessionUser | null };
+
+// Entity names that accept anonymous GET (list + single). The policy
+// layer still decides which rows to return — see `readFilter(user)`.
+const PUBLIC_READABLE_ENTITIES = new Set<string>([
+  "Herb",
+  "Remedy",
+  "Product",
+  "Event",
+  "SellerProfile",
+]);
 
 export const app = new Hono<{ Variables: Variables }>();
 
@@ -48,15 +63,19 @@ app.get("/api/health", (c) => {
 // /api/auth/me, /api/upload, /api/ai/*, /api/submissions/*.
 // -----------------------------------------------------------------------------
 
-app.use("/api/entities/*", authMiddleware);
-app.use("/api/auth/me", authMiddleware);
-app.use("/api/upload", authMiddleware);
-app.use("/api/ai/*", authMiddleware);
-app.use("/api/submissions/*", authMiddleware);
-app.use("/api/regenerate/*", authMiddleware);
-app.use("/api/agent/*", authMiddleware);
+// GET on /api/entities/<PublicReadable> accepts anonymous callers (user
+// may be null, policies filter rows accordingly). Everything else under
+// /api/entities requires auth. Both branches populate c.var.user (possibly
+// null for the optional one).
+app.use("/api/entities/*", entitiesAuthMiddleware);
+app.use("/api/auth/me", requireAuthMiddleware);
+app.use("/api/upload", requireAuthMiddleware);
+app.use("/api/ai/*", requireAuthMiddleware);
+app.use("/api/submissions/*", requireAuthMiddleware);
+app.use("/api/regenerate/*", requireAuthMiddleware);
+app.use("/api/agent/*", requireAuthMiddleware);
 
-async function authMiddleware(
+async function requireAuthMiddleware(
   c: Context<{ Variables: Variables }>,
   next: Next,
 ) {
@@ -76,6 +95,31 @@ async function authMiddleware(
     }
     throw err;
   }
+}
+
+async function entitiesAuthMiddleware(
+  c: Context<{ Variables: EntitiesVariables }>,
+  next: Next,
+) {
+  // Path layout is /api/entities/:name[/:id]. Pull :name.
+  const parts = new URL(c.req.url).pathname.split("/").filter(Boolean);
+  // ["api","entities",":name", ...]
+  const name = parts[2] ?? "";
+  const method = c.req.method.toUpperCase();
+  const isPublicGet = method === "GET" && PUBLIC_READABLE_ENTITIES.has(name);
+
+  if (!isPublicGet) {
+    // requireAuth narrows user to non-null; cast across the Variables
+    // divergence (user: SessionUser vs SessionUser|null) — runtime
+    // semantics are identical, just keyed on the same `user` slot.
+    return requireAuthMiddleware(c as unknown as Context<{ Variables: Variables }>, next);
+  }
+
+  // Anonymous allowed — populate user if a bearer was supplied, but
+  // never fail the request if it wasn't.
+  const user = await optionalUser(c.req.header("authorization"));
+  c.set("user", user);
+  await next();
 }
 
 // -----------------------------------------------------------------------------

@@ -45,9 +45,10 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (!clerkLoaded) return
     if (!isSignedIn) {
+      // Anonymous visitor on a public page — not an error, just no user.
       setDbUser(null)
+      setAuthError(null)
       setIsLoadingAuth(false)
-      setAuthError({ type: 'auth_required', message: 'Authentication required' })
       return
     }
     loadDbUser()

@@ -17,7 +17,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
-import type { Variables } from "../router";
+import type { EntitiesVariables } from "../router";
 import {
   combineFilters,
   pickWritable,
@@ -26,7 +26,7 @@ import {
   type Policy,
 } from "../policies";
 
-export const entitiesRoutes = new Hono<{ Variables: Variables }>();
+export const entitiesRoutes = new Hono<{ Variables: EntitiesVariables }>();
 
 const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 50;
@@ -176,6 +176,9 @@ entitiesRoutes.get("/:name/:id", async (c) => {
 
 entitiesRoutes.post("/:name", async (c) => {
   const user = c.get("user");
+  if (!user) {
+    throw new HTTPException(401, { message: "Sign-in required", cause: { code: "unauthorized" } });
+  }
   const { policy } = resolvePolicy(c.req.param("name"));
   const decision = policy.canCreate(user);
   if (!decision.ok) {
@@ -207,6 +210,9 @@ entitiesRoutes.post("/:name", async (c) => {
 
 entitiesRoutes.patch("/:name/:id", async (c) => {
   const user = c.get("user");
+  if (!user) {
+    throw new HTTPException(401, { message: "Sign-in required", cause: { code: "unauthorized" } });
+  }
   const { policy } = resolvePolicy(c.req.param("name"));
   const id = c.req.param("id");
 
@@ -250,6 +256,9 @@ entitiesRoutes.patch("/:name/:id", async (c) => {
 
 entitiesRoutes.delete("/:name/:id", async (c) => {
   const user = c.get("user");
+  if (!user) {
+    throw new HTTPException(401, { message: "Sign-in required", cause: { code: "unauthorized" } });
+  }
   const { policy } = resolvePolicy(c.req.param("name"));
   const id = c.req.param("id");
 

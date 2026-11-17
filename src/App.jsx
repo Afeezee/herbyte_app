@@ -6,39 +6,37 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 import { SignIn, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react'
 import PageNotFound from './lib/PageNotFound'
-import PublicLanding from './pages/PublicLanding'
-import { AuthProvider, useAuth } from '@/lib/AuthContext'
+import { AuthProvider } from '@/lib/AuthContext'
 
 const { Pages, Layout, mainPage } = pagesConfig
 const mainPageKey = mainPage ?? Object.keys(Pages)[0]
 const MainPage = mainPageKey ? Pages[mainPageKey] : <></>
 
+// Pages that require a signed-in user. Everything else — the landing
+// page, the public explorers, individual herb/remedy/product/event
+// profiles, About, Contact — is reachable without an account.
+const PRIVATE_PAGES = new Set([
+  'SubmitRemedy',
+  'Wishlist',
+  'UserProfile',
+  'SellerDashboard',
+  'OrganizeEvent',
+  'AdminDashboard',
+])
+
 const LayoutWrapper = ({ children, currentPageName }) =>
   Layout ? <Layout currentPageName={currentPageName}>{children}</Layout> : <>{children}</>
 
-const LoadingSpinner = () => (
-  <div className="fixed inset-0 flex items-center justify-center">
-    <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
-  </div>
+/** Clerk gate for a single page component — anonymous visitors are
+ *  bounced through sign-in and returned to the page they were opening. */
+const Private = ({ children }) => (
+  <>
+    <SignedIn>{children}</SignedIn>
+    <SignedOut>
+      <RedirectToSignIn />
+    </SignedOut>
+  </>
 )
-
-const AuthenticatedApp = () => {
-  const { isLoadingAuth } = useAuth()
-
-  if (isLoadingAuth) return <LoadingSpinner />
-
-  return (
-    <LayoutWrapper currentPageName={mainPageKey}>
-      <Routes>
-        <Route path="/" element={<MainPage />} />
-        {Object.entries(Pages).map(([path, Page]) => (
-          <Route key={path} path={`/${path}`} element={<Page />} />
-        ))}
-        <Route path="*" element={<PageNotFound />} />
-      </Routes>
-    </LayoutWrapper>
-  )
-}
 
 function App() {
   return (
@@ -61,37 +59,30 @@ function App() {
               </div>
             }
           />
-          {/* Landing page — public when signed out, real Home when signed in. */}
-          <Route
-            path="/"
-            element={
-              <>
-                <SignedIn>
-                  <AuthProvider>
-                    <AuthenticatedApp />
-                  </AuthProvider>
-                </SignedIn>
-                <SignedOut>
-                  <PublicLanding />
-                </SignedOut>
-              </>
-            }
-          />
-          {/* Every other route requires sign-in. Signed-out visitors get
-              bounced through Clerk and returned to what they were opening. */}
+          {/* Public + private routes share the same AuthProvider + Layout.
+              Public pages render for everyone; private pages re-mount inside
+              a Clerk gate that redirects signed-out visitors. */}
           <Route
             path="/*"
             element={
-              <>
-                <SignedIn>
-                  <AuthProvider>
-                    <AuthenticatedApp />
-                  </AuthProvider>
-                </SignedIn>
-                <SignedOut>
-                  <RedirectToSignIn />
-                </SignedOut>
-              </>
+              <AuthProvider>
+                <LayoutWrapper currentPageName={mainPageKey}>
+                  <Routes>
+                    <Route path="/" element={<MainPage />} />
+                    {Object.entries(Pages).map(([pageKey, Page]) => {
+                      const el = PRIVATE_PAGES.has(pageKey) ? (
+                        <Private>
+                          <Page />
+                        </Private>
+                      ) : (
+                        <Page />
+                      )
+                      return <Route key={pageKey} path={`/${pageKey}`} element={el} />
+                    })}
+                    <Route path="*" element={<PageNotFound />} />
+                  </Routes>
+                </LayoutWrapper>
+              </AuthProvider>
             }
           />
         </Routes>

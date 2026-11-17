@@ -4,8 +4,10 @@ import { createPageUrl } from "@/utils";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/clerk-react";
 import { ArrowRight, Shield, Users, Sparkles, Search, BookOpen, CheckCircle, Beaker, Leaf, ShoppingBag, Store } from "lucide-react";
 import RemedyCard from "../components/remedies/RemedyCard";
+import HerbCard from "../components/herbs/HerbCard";
 import TestimonialCard from "../components/home/TestimonialCard";
 import { usePageMeta } from "@/lib/usePageMeta";
 
@@ -16,6 +18,21 @@ export default function Home() {
     queryFn: () => api.entities.Remedy.filter({ featured: true, approved_by_ai: true }, '-created_date', 6),
     initialData: []
   });
+  // Fallback to any approved remedies when no featured ones exist yet —
+  // keeps the landing page populated instead of showing the empty-state
+  // card. Only fires when `featuredRemedies` came back empty.
+  const { data: fallbackRemedies } = useQuery({
+    queryKey: ['landing-fallback-remedies'],
+    queryFn: () => api.entities.Remedy.filter({ approved_by_ai: true }, '-created_date', 6),
+    enabled: !isLoading && (!featuredRemedies || featuredRemedies.length === 0),
+    initialData: []
+  });
+  const { data: sampleHerbs, isLoading: loadingHerbs } = useQuery({
+    queryKey: ['landing-sample-herbs'],
+    queryFn: () => api.entities.Herb.list('-created_date', 6),
+    initialData: []
+  });
+  const remediesToShow = featuredRemedies?.length ? featuredRemedies : fallbackRemedies;
 
   return (
     <div>
@@ -49,18 +66,37 @@ export default function Home() {
                   </Button>
                 </Link>
                 <Link to={createPageUrl("ExploreHerbs")}>
-                  <Button size="lg" variant="outline" className="bg-background text-[#2D5016] px-8 text-sm font-medium rounded-md inline-flex items-center justify-center gap-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border shadow-sm hover:text-accent-foreground h-10 border-white hover:bg-white/10 w-full sm:w-auto">
+                  <Button size="lg" variant="outline" className="h-10 px-8 border border-white bg-background text-[#2D5016] text-sm font-medium rounded-md inline-flex items-center justify-center gap-2 hover:bg-white/10 w-full sm:w-auto">
                     <Leaf className="w-5 h-5 mr-2" />
                     Learn About Herbs
                   </Button>
                 </Link>
-                <Link to={createPageUrl("SellerDashboard")}>
-                  <Button size="lg" variant="outline" className="bg-background text-[#2D5016] px-8 text-sm font-medium rounded-md inline-flex items-center justify-center gap-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border shadow-sm hover:text-accent-foreground h-10 border-white hover:bg-white/10 w-full sm:w-auto">
-                    <Store className="w-5 h-5 mr-2" />
-                    Become a Seller
-                  </Button>
-                </Link>
+                <SignedOut>
+                  <SignUpButton mode="redirect" forceRedirectUrl="/">
+                    <Button size="lg" variant="outline" className="h-10 px-8 border border-white bg-background text-[#2D5016] text-sm font-medium rounded-md inline-flex items-center justify-center gap-2 hover:bg-white/10 w-full sm:w-auto">
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Create free account
+                    </Button>
+                  </SignUpButton>
+                </SignedOut>
+                <SignedIn>
+                  <Link to={createPageUrl("SellerDashboard")}>
+                    <Button size="lg" variant="outline" className="h-10 px-8 border border-white bg-background text-[#2D5016] text-sm font-medium rounded-md inline-flex items-center justify-center gap-2 hover:bg-white/10 w-full sm:w-auto">
+                      <Store className="w-5 h-5 mr-2" />
+                      Become a Seller
+                    </Button>
+                  </Link>
+                </SignedIn>
               </div>
+              <SignedOut>
+                <p className="mt-4 text-sm text-white/80">
+                  Browse everything for free.{' '}
+                  <SignInButton mode="redirect" forceRedirectUrl="/">
+                    <button className="underline underline-offset-2 hover:text-white">Sign in</button>
+                  </SignInButton>
+                  {' '}to save favourites, submit remedies, or sell your products.
+                </p>
+              </SignedOut>
             </div>
 
             <div className="hidden md:block">
@@ -260,15 +296,53 @@ export default function Home() {
                 <div key={i} className="bg-gray-100 rounded-xl h-80 animate-pulse"></div>
               ))}
             </div>
-          ) : featuredRemedies.length > 0 ? (
+          ) : remediesToShow && remediesToShow.length > 0 ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {featuredRemedies.map((remedy) => (
+              {remediesToShow.map((remedy) => (
                 <RemedyCard key={remedy.id} remedy={remedy} />
               ))}
             </div>
           ) : (
             <div className="text-center py-12 bg-white rounded-xl">
-              <p className="text-gray-500">Featured remedies will appear here soon</p>
+              <p className="text-gray-500">Approved remedies will appear here as the catalogue grows.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Sample Herbs */}
+      <section className="py-16 md:py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex justify-between items-center mb-12">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold text-[#2D5016] mb-2">
+                Herbs to know
+              </h2>
+              <p className="text-gray-600">A sample from the botanical reference — every plant has a full profile.</p>
+            </div>
+            <Link to={createPageUrl("ExploreHerbs")}>
+              <Button variant="outline" className="border-[#2D5016] text-[#2D5016] hover:bg-[#2D5016] hover:text-white">
+                Browse all herbs
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </div>
+
+          {loadingHerbs ? (
+            <div className="grid md:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-gray-100 rounded-xl h-80 animate-pulse"></div>
+              ))}
+            </div>
+          ) : sampleHerbs && sampleHerbs.length > 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {sampleHerbs.map((herb) => (
+                <HerbCard key={herb.id} herb={herb} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-[#F5F1E8] rounded-xl">
+              <p className="text-gray-500">Herbs will appear here as the catalogue grows.</p>
             </div>
           )}
         </div>
@@ -319,16 +393,30 @@ export default function Home() {
                 Explore Remedies
               </Button>
             </Link>
-            <Link to={createPageUrl("SubmitRemedy")}>
-              <Button size="lg" variant="outline" className="border-[#2D5016] text-[#2D5016] hover:bg-[#F5F1E8] w-full sm:w-auto">
-                Share a Remedy
-              </Button>
-            </Link>
-            <Link to={createPageUrl("SellerDashboard")}>
-              <Button size="lg" variant="outline" className="border-[#2D5016] text-[#2D5016] hover:bg-[#F5F1E8] w-full sm:w-auto">
-                Become a Seller
-              </Button>
-            </Link>
+            <SignedIn>
+              <Link to={createPageUrl("SubmitRemedy")}>
+                <Button size="lg" variant="outline" className="border-[#2D5016] text-[#2D5016] hover:bg-[#F5F1E8] w-full sm:w-auto">
+                  Share a Remedy
+                </Button>
+              </Link>
+              <Link to={createPageUrl("SellerDashboard")}>
+                <Button size="lg" variant="outline" className="border-[#2D5016] text-[#2D5016] hover:bg-[#F5F1E8] w-full sm:w-auto">
+                  Become a Seller
+                </Button>
+              </Link>
+            </SignedIn>
+            <SignedOut>
+              <SignUpButton mode="redirect" forceRedirectUrl="/">
+                <Button size="lg" variant="outline" className="border-[#2D5016] text-[#2D5016] hover:bg-[#F5F1E8] w-full sm:w-auto">
+                  Create free account
+                </Button>
+              </SignUpButton>
+              <SignInButton mode="redirect" forceRedirectUrl="/">
+                <Button size="lg" variant="ghost" className="text-[#2D5016] hover:bg-[#F5F1E8] w-full sm:w-auto">
+                  I already have an account
+                </Button>
+              </SignInButton>
+            </SignedOut>
           </div>
         </div>
       </section>
