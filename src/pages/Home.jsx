@@ -13,26 +13,41 @@ import { usePageMeta } from "@/lib/usePageMeta";
 
 export default function Home() {
   usePageMeta();
+  // Featured remedies — may be a small set (admin-curated).
   const { data: featuredRemedies, isLoading } = useQuery({
     queryKey: ['featured-remedies'],
     queryFn: () => api.entities.Remedy.filter({ featured: true, approved_by_ai: true }, '-created_date', 6),
     initialData: []
   });
-  // Fallback to any approved remedies when no featured ones exist yet —
-  // keeps the landing page populated instead of showing the empty-state
-  // card. Only fires when `featuredRemedies` came back empty.
-  const { data: fallbackRemedies } = useQuery({
-    queryKey: ['landing-fallback-remedies'],
-    queryFn: () => api.entities.Remedy.filter({ approved_by_ai: true }, '-created_date', 6),
-    enabled: !isLoading && (!featuredRemedies || featuredRemedies.length === 0),
+  // Always also pull the latest approved remedies so the landing is
+  // populated even when only one or two entries have featured=true.
+  // The merge below puts featured first, then fills up to 6 with the
+  // latest approved ones (deduped by id).
+  const { data: latestRemedies } = useQuery({
+    queryKey: ['landing-latest-remedies'],
+    queryFn: () => api.entities.Remedy.filter({ approved_by_ai: true }, '-created_date', 12),
     initialData: []
   });
   const { data: sampleHerbs, isLoading: loadingHerbs } = useQuery({
     queryKey: ['landing-sample-herbs'],
-    queryFn: () => api.entities.Herb.list('-created_date', 6),
+    queryFn: () => api.entities.Herb.list('-created_date', 12),
     initialData: []
   });
-  const remediesToShow = featuredRemedies?.length ? featuredRemedies : fallbackRemedies;
+  const remediesToShow = React.useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const r of [...(featuredRemedies ?? []), ...(latestRemedies ?? [])]) {
+      if (!r?.id || seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push(r);
+      if (out.length >= 6) break;
+    }
+    return out;
+  }, [featuredRemedies, latestRemedies]);
+  const herbsToShow = React.useMemo(
+    () => (sampleHerbs ?? []).slice(0, 6),
+    [sampleHerbs],
+  );
 
   return (
     <div>
@@ -334,9 +349,9 @@ export default function Home() {
                 <div key={i} className="bg-gray-100 rounded-xl h-80 animate-pulse"></div>
               ))}
             </div>
-          ) : sampleHerbs && sampleHerbs.length > 0 ? (
+          ) : herbsToShow.length > 0 ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sampleHerbs.map((herb) => (
+              {herbsToShow.map((herb) => (
                 <HerbCard key={herb.id} herb={herb} />
               ))}
             </div>
