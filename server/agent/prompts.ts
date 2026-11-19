@@ -12,6 +12,14 @@ const safetyInstruction = `Rules:
 - Do NOT assert medical efficacy. Phrase uses as "traditionally used for", "has long been drunk as a tonic for", etc.
 - Keep claims within the realm of folk / traditional / ethnobotanical use. The downstream moderator will add drug interactions and safety ratings.
 - Prefer well-established plants with documented traditional use. Do not invent cultivars.
+- CRITICAL — botanical names must be REAL PLANT binomials. Do NOT emit
+  a Latin name you cannot be certain is a plant. "Urotheca obovata" is
+  a snake, "Bitis gabonica" is a viper, "Nitraria schoberi" is a plant
+  — if you are unsure, prefer a different herb you ARE certain of.
+  When the common name is ambiguous (e.g. "nettle" → Urtica dioica),
+  pick the species that is actually used for the described purpose and
+  that you can cite from the search snippets below. When no snippets
+  support the pairing, omit the botanical name rather than guess.
 - Reply with ONLY a single JSON object matching the schema. No prose, no code fences, no <think>.`;
 
 function searchBlock(results: SearchResult[]): string {

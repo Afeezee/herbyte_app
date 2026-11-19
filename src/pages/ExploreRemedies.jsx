@@ -24,7 +24,7 @@ export default function ExploreRemedies() {
 
   const { data: remedies, isLoading } = useQuery({
     queryKey: ['remedies'],
-    queryFn: () => api.entities.Remedy.filter({ approved_by_ai: true }, '-created_date'),
+    queryFn: () => api.entities.Remedy.filter({ approved_by_ai: true }, '-created_date', 1000),
     initialData: [],
   });
 

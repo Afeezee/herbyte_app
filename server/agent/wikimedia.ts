@@ -248,6 +248,152 @@ export async function fetchCommonsImageByBotanical(botanical: string): Promise<W
 }
 
 /**
+ * Does a plant with this name actually exist on Wikipedia?
+ * Fastest hallucination check: if the AI confabulated a species
+ * ("Urotheca obovata" is a snake, not a plant), it won't resolve
+ * to a Wikipedia article whose Wikidata taxon identifies as a plant.
+ *
+ * Returns:
+ *   {ok: true, taxonName?} — article found. taxonName when Wikidata has P225.
+ *   {ok: false, reason} — not resolvable OR resolves to a non-plant.
+ *
+ * "Plant" check uses Wikidata's parent-taxon (P171) chain: if the
+ * article has a Wikidata item with a P225 taxon name, it's considered
+ * a plausible plant. Snakes, bacteria, etc. have articles with
+ * different identifying claims (or no P225 at all in the fuzzy case).
+ */
+export async function verifyPlantName(name: string): Promise<
+  { ok: true; taxonName: string | null; articleTitle: string }
+  | { ok: false; reason: string }
+> {
+  const trimmed = (name ?? "").trim();
+  if (!trimmed) return { ok: false, reason: "empty name" };
+
+  const article = await fetchWikipediaLeadImage(trimmed);
+  if (!article) {
+    return { ok: false, reason: `no Wikipedia article found for "${trimmed}"` };
+  }
+
+  // If we got a verifiedBotanicalName (Wikidata P225 "taxon name"),
+  // treat the article as a confirmed taxon — plants and animals both
+  // use this, but combined with the next step we also check that it's
+  // not obviously an animal.
+  if (article.verifiedBotanicalName) {
+    // Also verify the parent taxon is in the plant lineage. This is
+    // the step that catches "Urotheca obovata" (a snake, genus
+    // Urotheca) being confused with "Urera obovata" (a plant).
+    const plantCheck = await isPlantTaxon(article.verifiedBotanicalName);
+    if (plantCheck === false) {
+      return {
+        ok: false,
+        reason: `"${trimmed}" resolves to ${article.verifiedBotanicalName} on Wikipedia, which is not a plant`,
+      };
+    }
+    // plantCheck true OR null (couldn't determine) → accept
+    return { ok: true, taxonName: article.verifiedBotanicalName, articleTitle: trimmed };
+  }
+
+  // No Wikidata taxon — the article exists but isn't a canonical
+  // species page. Many plants have common-name articles without P225.
+  // Accept but flag no verified taxon.
+  return { ok: true, taxonName: null, articleTitle: trimmed };
+}
+
+/**
+ * Query Wikidata for a taxon by its scientific name, then walk the
+ * P171 "parent taxon" chain looking for Plantae (Q756). Returns true
+ * when the chain includes Plantae, false when it doesn't (within a
+ * shallow walk), null when we couldn't tell.
+ */
+async function isPlantTaxon(taxonName: string): Promise<boolean | null> {
+  try {
+    // Find the Wikidata entity whose P225 (taxon name) equals this
+    // string. We use the search API on wikidata.org.
+    const searchParams = new URLSearchParams({
+      action: "wbsearchentities",
+      format: "json",
+      origin: "*",
+      search: taxonName,
+      language: "en",
+      type: "item",
+      limit: "5",
+    });
+    const search = await wikiFetch<{ search?: Array<{ id?: string; description?: string }> }>(
+      `https://www.wikidata.org/w/api.php?${searchParams.toString()}`,
+    );
+    const candidates = search?.search ?? [];
+    if (candidates.length === 0) return null;
+
+    // Prefer a candidate described as a plant / species of plant / genus
+    // of plants. If any candidate is described as a snake / fish /
+    // mammal / insect, return false fast — the name is ambiguous and
+    // the AI likely picked the wrong one.
+    const descs = candidates
+      .map((c) => (c.description ?? "").toLowerCase())
+      .filter((d) => d.length > 0);
+    const plantHit = descs.some((d) =>
+      /plant|flora|herb|tree|shrub|grass|flower|vine|fern|moss|fungus/.test(d),
+    );
+    const animalHit = descs.some((d) =>
+      /snake|lizard|fish|mammal|insect|spider|bird|reptile|amphibian|animal|species of [a-z]* (snake|lizard|bird|fish|insect|mammal)/.test(
+        d,
+      ),
+    );
+    if (plantHit && !animalHit) return true;
+    if (animalHit && !plantHit) return false;
+
+    // Ambiguous — walk the P171 chain of the first candidate.
+    const topId = candidates[0]?.id;
+    if (!topId) return null;
+    return await walkParentTaxonForPlantae(topId);
+  } catch {
+    return null;
+  }
+}
+
+async function walkParentTaxonForPlantae(
+  entityId: string,
+  maxDepth = 8,
+): Promise<boolean | null> {
+  // Q756 is Plantae on Wikidata. Q729 is Animalia.
+  const PLANTAE = "Q756";
+  const ANIMALIA = "Q729";
+  let current: string | null = entityId;
+  let depth = 0;
+  const seen = new Set<string>();
+  while (current && depth < maxDepth) {
+    const here: string = current;
+    if (seen.has(here)) return null;
+    seen.add(here);
+
+    const params: URLSearchParams = new URLSearchParams({
+      action: "wbgetentities",
+      format: "json",
+      origin: "*",
+      ids: here,
+      props: "claims",
+    });
+    type TaxonEntities = {
+      entities?: Record<
+        string,
+        { claims?: { P171?: Array<{ mainsnak?: { datavalue?: { value?: { id?: string } } } }> } }
+      >;
+    };
+    const data: TaxonEntities | null = await wikiFetch<TaxonEntities>(
+      `https://www.wikidata.org/w/api.php?${params.toString()}`,
+    );
+    const parent: string | undefined =
+      data?.entities?.[here]?.claims?.P171?.[0]?.mainsnak?.datavalue?.value?.id;
+    if (!parent) return null;
+    if (parent === PLANTAE) return true;
+    if (parent === ANIMALIA) return false;
+    current = parent;
+    depth += 1;
+  }
+  return null;
+}
+
+/**
  * Try Wikimedia sources in order: Wikipedia article by common name
  * (handles redirects, usually highest-quality lead image + optionally
  * the verified botanical name), then by botanical name, then

@@ -24,7 +24,7 @@ export default function EventsPage() {
 
   const { data: events, isLoading } = useQuery({
     queryKey: ['events'],
-    queryFn: () => api.entities.Event.list('-date'),
+    queryFn: () => api.entities.Event.list('-date', 1000),
     initialData: [],
   });
 

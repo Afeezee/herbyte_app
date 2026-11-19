@@ -161,6 +161,27 @@ export function buildRemedyModerationPrompt(
     : "(no results)";
   const user = `Task: review the following community-submitted remedy. Decide moderation_status (Approved / Flagged - Risk Identified / Rejected), risk_level (Low/Moderate/High/Critical), whether expert review is required, and produce an enriched draft record that would be safe to publish as a Herbyte Remedy. The submitter's phrasing may be sparse — flesh out description, safety_rating, contraindications, drug_interactions and side_effects using standard herbalism knowledge. Use the search_results block for citations only.
 
+ANTI-HALLUCINATION GUARDRAIL — read first:
+Before approving, verify EVERY plant name you see is a real medicinal plant:
+- The primary_herb_name and every entry in herbs_used must be a bona
+  fide plant species or well-known common plant name.
+- If a Latin binomial is proposed, it must be a plant binomial — NOT an
+  animal, fungus, bacterium, or made-up species. Examples of
+  hallucinations to catch: "Urotheca obovata" (that is a snake genus,
+  NOT the plant Urera obovata), "Bitis gabonica" (a viper), any Latin
+  name you cannot confirm from the search_results or standard
+  herbalism knowledge.
+- If the common_name and the proposed Latin binomial disagree (e.g.
+  common name is "stinging nettle" but binomial is for an unrelated
+  species), reject.
+- If the health_condition claim is wildly inconsistent with the
+  plant's documented use (e.g. proposing a purely ornamental plant for
+  a serious medical condition without any supporting search result),
+  reject.
+- When in doubt, set moderation_status = "Rejected" with ai_feedback
+  explaining the mismatch. A false rejection costs us one entry; a
+  false approval poisons the whole catalogue.
+
 MANDATORY output fields (must not be empty):
 - draft.name — a specific remedy name (not generic)
 - draft.description — 2–5 full sentences describing the remedy, its traditional use, and what to expect. NEVER leave blank.
@@ -291,6 +312,19 @@ export function buildHerbModerationPrompt(
         .join("\n")
     : "(no results)";
   const user = `Task: review the following community-submitted HERB entry and produce an enriched draft record safe to publish as a Herbyte Herb. Flesh out health benefits (with evidence_level), preparation methods, drug interactions, contraindications, side effects and major compounds using standard herbalism knowledge. Use the search_results block for citations only.
+
+ANTI-HALLUCINATION GUARDRAIL — read first:
+- The common_name must be a bona fide plant.
+- If a botanical_name is supplied or you add one, it must be a PLANT
+  binomial, not an animal, fungus or made-up species. Examples of
+  hallucinations to catch: "Urotheca obovata" (a snake genus), any
+  Latin binomial you cannot cross-reference to a plant from the
+  search_results or well-established herbalism knowledge.
+- If the common_name and the proposed botanical_name disagree (common
+  name says "nettle" but binomial names an unrelated species), reject.
+- When in doubt, set moderation_status = "Rejected" with ai_feedback
+  explaining the mismatch. A false reject costs one entry; a false
+  approve poisons the catalogue.
 
 MANDATORY output fields (must not be empty):
 - draft.common_name

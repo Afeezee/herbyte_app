@@ -24,7 +24,7 @@ export default function ExploreHerbs() {
 
   const { data: herbs, isLoading } = useQuery({
     queryKey: ['herbs'],
-    queryFn: () => api.entities.Herb.list('-created_date'),
+    queryFn: () => api.entities.Herb.list('-created_date', 1000),
     initialData: [],
   });
 

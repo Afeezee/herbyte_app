@@ -20,7 +20,7 @@ import {
 } from "./diversity";
 import { buildHerbChoicePrompt, buildRemedyChoicePrompt } from "./prompts";
 import { buildHerbImageQueries, pingUnsplashDownload, searchUnsplashCascade } from "./unsplash";
-import { fetchWikimediaImage } from "./wikimedia";
+import { fetchWikimediaImage, verifyPlantName } from "./wikimedia";
 
 // ---------------------------------------------------------------------------
 // Lightweight schemas for the agent's own generation call. The real
@@ -210,8 +210,14 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
   }
   const targetHerb = opts.targetHerb?.trim() || null;
 
+  // Remedies always grounded on web search by default — the cost of a
+  // hallucinated remedy ("Urotheca obovata [a snake] for prostate
+  // health") outweighs any token savings from skipping Serper.
+  // Admins can still override explicitly with skipResearch.
   const doResearch =
-    opts.forceResearch || (!opts.skipResearch && Math.random() < env.AGENT_RESEARCH_RATIO);
+    opts.forceResearch ||
+    (!opts.skipResearch &&
+      (plan.kind === "remedy" || Math.random() < env.AGENT_RESEARCH_RATIO));
   const method: "research" | "model-only" = doResearch ? "research" : "model-only";
 
   let researchResults = null as Awaited<ReturnType<typeof search>>["results"] | null;
@@ -306,6 +312,46 @@ async function runOne(opts: AgentRunOptions): Promise<PerPostResult> {
 
   const displayName =
     "common_name" in choice ? choice.common_name : (choice as RemedyChoice).name;
+
+  // ---------------------------------------------------------------------
+  // Hallucination gate. Before anything downstream (image fetch,
+  // submission, moderation) we verify that the primary herb actually
+  // exists as a plant on Wikipedia/Wikidata. This is the step that
+  // catches confabulations like "Urotheca obovata" (a snake) being
+  // proposed as a herb. If the primary herb can't be verified AS A
+  // PLANT, reject the whole generation.
+  // ---------------------------------------------------------------------
+  {
+    const primaryName =
+      plan.kind === "herb"
+        ? (choice as HerbChoice).common_name
+        : (choice as RemedyChoice).primary_herb_name;
+    const primaryBotanical =
+      plan.kind === "herb" ? (choice as HerbChoice).botanical_name : null;
+
+    // Prefer verifying the botanical (unambiguous) when available,
+    // otherwise verify the common name.
+    const verifyTarget = primaryBotanical?.trim() || primaryName;
+    const verdict = await verifyPlantName(verifyTarget);
+    if (!verdict.ok) {
+      return {
+        ok: false,
+        kind: plan.kind,
+        category: plan.category,
+        region: plan.region,
+        generation_method: method,
+        error: `plant verification failed: ${verdict.reason}`,
+      };
+    }
+    // If Wikidata gave us a different canonical taxon, bring it in so
+    // downstream fields / moderation see the truth, not the AI's guess.
+    if (verdict.taxonName && plan.kind === "herb") {
+      const stored = (choice as HerbChoice).botanical_name?.trim().toLowerCase();
+      if (!stored || stored !== verdict.taxonName.toLowerCase()) {
+        (choice as HerbChoice).botanical_name = verdict.taxonName;
+      }
+    }
+  }
 
   // Image: try Wikimedia first (correct botanical identification), then
   // Unsplash as a lifestyle-aesthetic fallback. Wikimedia also returns

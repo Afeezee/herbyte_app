@@ -87,42 +87,47 @@ export default function Layout({ children, currentPageName }) {
         }
       `}</style>
 
-      {/* Desktop Header */}
+      {/* Desktop Header — nav stays on ONE line (flex-nowrap + overflow-x
+          scroll if crowded). Wrapping nav items grew the header mid-scroll
+          and occluded hero CTAs, so we keep a fixed row height. The icon
+          label hides below xl: so ten-plus items fit without scroll on
+          typical 1280-1400px screens. */}
       <header className="hidden lg:block sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[#2D5016]/10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <Link to={createPageUrl("Home")} className="flex items-center gap-3 group flex-shrink-0">
-              <div className="w-10 h-10 bg-gradient-to-br from-[#2D5016] to-[#4A7C2E] rounded-full flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
-                <Leaf className="w-6 h-6 text-white" />
+        <div className="max-w-7xl mx-auto px-4 xl:px-6 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <Link to={createPageUrl("Home")} className="flex items-center gap-2 group flex-shrink-0">
+              <div className="w-9 h-9 bg-gradient-to-br from-[#2D5016] to-[#4A7C2E] rounded-full flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
+                <Leaf className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-[#2D5016] tracking-tight whitespace-nowrap">Herbyte</h1>
-                <p className="text-xs text-[#4A7C2E] whitespace-nowrap">Evidence-Based Herbal Medicine</p>
+                <h1 className="text-xl font-bold text-[#2D5016] tracking-tight whitespace-nowrap leading-tight">Herbyte</h1>
+                <p className="hidden xl:block text-[11px] text-[#4A7C2E] whitespace-nowrap leading-tight">Evidence-Based Herbal Medicine</p>
               </div>
             </Link>
 
-            <nav className="flex items-center gap-4 flex-wrap justify-end">
+            <nav className="flex items-center gap-1 flex-nowrap overflow-x-auto justify-end min-w-0">
               {allNavItems.map((item) => (
                 <Link
                   key={item.title}
                   to={item.url}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 whitespace-nowrap ${
+                  title={item.title}
+                  className={`flex items-center gap-1.5 px-2 py-2 rounded-lg transition-all duration-200 whitespace-nowrap ${
                     location.pathname === item.url
                       ? "text-[#2D5016] bg-[#4A7C2E]/10 font-medium"
                       : "text-[#4B5563] hover:text-[#2D5016] hover:bg-[#F5F1E8]"
                   }`}
                 >
                   <item.icon className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-sm">{item.title}</span>
+                  <span className="hidden xl:inline text-sm">{item.title}</span>
                 </Link>
               ))}
               <SignedOut>
-                <div className="flex items-center gap-2 border-l border-[#2D5016]/10 pl-4 ml-1">
+                <div className="flex items-center gap-2 border-l border-[#2D5016]/10 pl-3 ml-1">
                   <SignInButton mode="redirect" forceRedirectUrl={location.pathname}>
                     <Button variant="ghost" size="sm" className="text-[#2D5016] hover:bg-[#F5F1E8]">Sign in</Button>
                   </SignInButton>
                   <SignUpButton mode="redirect" forceRedirectUrl={location.pathname}>
-                    <Button size="sm" className="bg-[#4A7C2E] hover:bg-[#2D5016] text-white">Create account</Button>
+                    <Button size="sm" className="bg-[#4A7C2E] hover:bg-[#2D5016] text-white whitespace-nowrap">Create account</Button>
                   </SignUpButton>
                 </div>
               </SignedOut>

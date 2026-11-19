@@ -28,7 +28,10 @@ import {
 
 export const entitiesRoutes = new Hono<{ Variables: EntitiesVariables }>();
 
-const MAX_LIMIT = 200;
+// Hard ceiling to protect the DB from a pathological query. Default
+// is deliberately tight for callers that forget to pass one, but
+// explore/listing pages pass explicit larger limits.
+const MAX_LIMIT = 2000;
 const DEFAULT_LIMIT = 50;
 
 // ---------------------------------------------------------------------------

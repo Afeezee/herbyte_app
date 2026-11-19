@@ -46,25 +46,25 @@ export default function AdminDashboard() {
   // Fetch all data
   const { data: herbs = [] } = useQuery({
     queryKey: ['admin-herbs'],
-    queryFn: () => api.entities.Herb.list('-created_date'),
+    queryFn: () => api.entities.Herb.list('-created_date', 1000),
     enabled: user?.role === 'admin',
   });
 
   const { data: remedies = [] } = useQuery({
     queryKey: ['admin-remedies'],
-    queryFn: () => api.entities.Remedy.list('-created_date'),
+    queryFn: () => api.entities.Remedy.list('-created_date', 1000),
     enabled: user?.role === 'admin',
   });
 
   const { data: products = [] } = useQuery({
     queryKey: ['admin-products'],
-    queryFn: () => api.entities.Product.list('-created_date'),
+    queryFn: () => api.entities.Product.list('-created_date', 1000),
     enabled: user?.role === 'admin',
   });
 
   const { data: events = [] } = useQuery({
     queryKey: ['admin-events'],
-    queryFn: () => api.entities.Event.list('-created_date'),
+    queryFn: () => api.entities.Event.list('-created_date', 1000),
     enabled: user?.role === 'admin',
   });
 
